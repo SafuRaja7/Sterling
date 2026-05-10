@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -47,19 +48,19 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [financeTab, setFinanceTab] = useState<"deposits" | "withdrawals" | "history">("deposits");
-  
+
   // MODALS STATE
   const [editingUser, setEditingUser] = useState<any>(null);
   const [comboUser, setComboUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ balance: 0, isTaskLocked: false, withdrawalAddress: "" });
   const [comboForms, setComboForms] = useState([{ position: 5, itemsCount: 3, price: 100, commission: 20 }]);
   const [userCombos, setUserCombos] = useState<any[]>([]);
-  
+
   const [productTab, setProductTab] = useState<number | "combos">(1);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [productForm, setProductForm] = useState({ name: "", image: "", price: 100, commission: 20, vip_level: 1, category: "general", is_combo_item: false });
-  
+
   const [showNotifTray, setShowNotifTray] = useState(false);
   const [newVA, setNewVA] = useState<any>(null);
 
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
   const isMasterAdmin = user?.role === 'admin' || user?.username?.toLowerCase().includes('admin');
   const isVA = user?.role === 'va';
   const vaPermissions = (user as any)?.permissions || {};
-  
+
   const canEdit = isMasterAdmin || vaPermissions.can_edit;
   const canResetTasks = isMasterAdmin || vaPermissions.can_reset_tasks;
   const canApproveRequests = isMasterAdmin || vaPermissions.can_approve_requests;
@@ -90,8 +91,8 @@ export default function AdminDashboard() {
   }, [editingProduct]);
 
   useEffect(() => {
-    if (editingUser) setEditForm({ 
-      balance: editingUser.balance || 0, 
+    if (editingUser) setEditForm({
+      balance: editingUser.balance || 0,
       isTaskLocked: editingUser.isTaskLocked || false,
       withdrawalAddress: editingUser.withdrawalAddress || ""
     });
@@ -143,7 +144,7 @@ export default function AdminDashboard() {
       if (isVA && meRes && meRes.status === 'fulfilled') {
         setUser(meRes.value.data.data);
       }
-    } catch (err: any) { 
+    } catch (err: any) {
       console.error("Fetch All Error:", err);
     } finally { setLoading(false); }
   };
@@ -159,8 +160,8 @@ export default function AdminDashboard() {
       } else {
         toast.error(res.data.message || "Approval failed");
       }
-    } catch (err: any) { 
-      toast.error(err.response?.data?.message || "Failed to communicate with server"); 
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to communicate with server");
     }
     finally { setProcessingId(null); }
   };
@@ -250,8 +251,8 @@ export default function AdminDashboard() {
       setNewVA(data.data);
       fetchAll();
       toast.success("VA Account Generated");
-    } catch (err: any) { 
-      toast.error(err.response?.data?.message || "Failed to create VA"); 
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to create VA");
     }
   };
 
@@ -267,15 +268,15 @@ export default function AdminDashboard() {
   const handleVAStatus = async (vaId: string, action: 'approve' | 'reject') => {
     if (!isMasterAdmin) return;
     if (action === 'reject') {
-       handleVADelete(vaId);
-       return;
+      handleVADelete(vaId);
+      return;
     }
     try {
       await api.put(`/admin/va/${vaId}/status`, { action });
       toast.success(`VA ${action}d`);
       fetchAll();
-    } catch (err: any) { 
-      toast.error(err.response?.data?.message || "Failed to approve VA"); 
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to approve VA");
     }
   };
 
@@ -285,8 +286,8 @@ export default function AdminDashboard() {
       await api.put(`/admin/va/${vaId}/permissions`, { [permission]: value });
       toast.success("Permission updated");
       fetchAll();
-    } catch (err: any) { 
-      toast.error(err.response?.data?.message || "Failed to update permission"); 
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update permission");
     }
   };
 
@@ -322,7 +323,7 @@ export default function AdminDashboard() {
   const filteredUsers = data.users.filter((u: any) =>
     u.username?.toLowerCase().includes(search.toLowerCase())
   );
-  const filteredProducts = data.products.filter((p: any) => 
+  const filteredProducts = data.products.filter((p: any) =>
     productTab === "combos" ? p.is_combo_item : p.vip_level === productTab && !p.is_combo_item
   );
 
@@ -332,7 +333,7 @@ export default function AdminDashboard() {
 
   const financeCount = pendingDeposits.length + pendingWithdrawals.length;
   const requestsCount = data.levelRequests.length;
-  
+
   // Calculate Support Unread Count (Only threads with new activity since last seen)
   const supportCount = (data.chats || []).reduce((acc: number, thread: any) => {
     const lastActivity = new Date(thread.last_message_at).getTime();
@@ -341,7 +342,7 @@ export default function AdminDashboard() {
     }
     return acc;
   }, 0);
-  
+
   // Calculate New Users Count (Only users registered since last seen)
   const newUsersCount = data.users.filter((u: any) => {
     const registrationDate = new Date(u.createdAt).getTime();
@@ -478,20 +479,20 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-2 mb-4">
-                        {[1, 2, 3].map(lvl => (
-                           <button key={lvl} onClick={() => updateVIP(u._id, lvl)}
-                              disabled={!canEdit}
-                              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg ${!canEdit ? 'opacity-50 cursor-not-allowed grayscale' : 'active:scale-95'}`}
-                              style={u.vipLevel === lvl 
-                                ? { background: GOLDEN_GRADIENT, color: "#0D0D0D", transform: canEdit ? "scale(1.05)" : "scale(1)", border: "none" }
-                                : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.05)" }
-                              }>
-                              VIP {lvl}
-                           </button>
-                        ))}
+                      {[1, 2, 3].map(lvl => (
+                        <button key={lvl} onClick={() => updateVIP(u._id, lvl)}
+                          disabled={!canEdit}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg ${!canEdit ? 'opacity-50 cursor-not-allowed grayscale' : 'active:scale-95'}`}
+                          style={u.vipLevel === lvl
+                            ? { background: GOLDEN_GRADIENT, color: "#0D0D0D", transform: canEdit ? "scale(1.05)" : "scale(1)", border: "none" }
+                            : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.05)" }
+                          }>
+                          VIP {lvl}
+                        </button>
+                      ))}
                     </div>
                     <div className="flex gap-2 pt-3 border-t border-white/5">
-                      <button onClick={() => setEditingUser(u)} disabled={!canEdit} 
+                      <button onClick={() => setEditingUser(u)} disabled={!canEdit}
                         className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase bg-[#252525] transition-all ${canEdit ? 'text-white/60 hover:text-white' : 'text-white/10 cursor-not-allowed'}`}>
                         Edit
                       </button>
@@ -522,25 +523,25 @@ export default function AdminDashboard() {
                   const txs = financeTab === "deposits" ? pendingDeposits : financeTab === "withdrawals" ? pendingWithdrawals : txHistory;
                   return txs.map((tx: any) => (
                     <div key={tx.id} className="rounded-[20px] p-5 bg-[#1A1A1A] border border-white/5">
-                       <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-[#38A169]/10 text-[#38A169]' : 'bg-[#E53E3E]/10 text-[#E53E3E]'}`}><ArrowUpRight size={18} /></div>
-                             <div><p className="text-sm font-black text-white uppercase">{tx.type}</p><p className="text-[9px] font-bold text-white/20 uppercase">{tx.users?.username}</p></div>
-                          </div>
-                          <p className="text-lg font-black text-gold-gradient">${parseFloat(tx.amount).toFixed(2)}</p>
-                       </div>
-                       {tx.status === 'pending' && (
-                          <div className="flex gap-3">
-                             <button onClick={() => handleTransaction(tx.id, "approve")} disabled={processingId === tx.id || !canApproveFinance} 
-                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${canApproveFinance ? 'bg-[#38A169]/10 text-[#38A169] border border-[#38A169]/30 hover:bg-[#38A169]/20' : 'bg-white/5 text-white/10 border-white/5 cursor-not-allowed'}`}>
-                                Approve
-                             </button>
-                             <button onClick={() => handleTransaction(tx.id, "reject")} disabled={processingId === tx.id || !canApproveFinance}
-                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${canApproveFinance ? 'bg-[#E53E3E]/10 text-[#E53E3E] border border-[#E53E3E]/30 hover:bg-[#E53E3E]/20' : 'bg-white/5 text-white/10 border-white/5 cursor-not-allowed'}`}>
-                                Reject
-                             </button>
-                          </div>
-                       )}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-[#38A169]/10 text-[#38A169]' : 'bg-[#E53E3E]/10 text-[#E53E3E]'}`}><ArrowUpRight size={18} /></div>
+                          <div><p className="text-sm font-black text-white uppercase">{tx.type}</p><p className="text-[9px] font-bold text-white/20 uppercase">{tx.users?.username}</p></div>
+                        </div>
+                        <p className="text-lg font-black text-gold-gradient">${parseFloat(tx.amount).toFixed(2)}</p>
+                      </div>
+                      {tx.status === 'pending' && (
+                        <div className="flex gap-3">
+                          <button onClick={() => handleTransaction(tx.id, "approve")} disabled={processingId === tx.id || !canApproveFinance}
+                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${canApproveFinance ? 'bg-[#38A169]/10 text-[#38A169] border border-[#38A169]/30 hover:bg-[#38A169]/20' : 'bg-white/5 text-white/10 border-white/5 cursor-not-allowed'}`}>
+                            Approve
+                          </button>
+                          <button onClick={() => handleTransaction(tx.id, "reject")} disabled={processingId === tx.id || !canApproveFinance}
+                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${canApproveFinance ? 'bg-[#E53E3E]/10 text-[#E53E3E] border border-[#E53E3E]/30 hover:bg-[#E53E3E]/20' : 'bg-white/5 text-white/10 border-white/5 cursor-not-allowed'}`}>
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ));
                 })()}
@@ -550,12 +551,12 @@ export default function AdminDashboard() {
             {activeTab === "products" && isMasterAdmin && (
               <motion.div key="products" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="flex items-center justify-between px-2">
-                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Product Library</p>
-                   <button onClick={() => { setEditingProduct(null); setShowAddProduct(true); }} 
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Product Library</p>
+                  <button onClick={() => { setEditingProduct(null); setShowAddProduct(true); }}
                     style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D", boxShadow: "0 0 30px rgba(212,175,55,0.4)" }}
                     className="h-12 px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all">
-                      <Plus size={18} /> Add New Product
-                   </button>
+                    <Plus size={18} /> Add New Product
+                  </button>
                 </div>
                 <div className="flex gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
                   {[1, 2, 3, "combos"].map(lvl => (
@@ -570,13 +571,13 @@ export default function AdminDashboard() {
                       <div className="h-[150px] relative bg-black/40 p-4 flex items-center justify-center overflow-hidden">
                         <img src={product.image_url || product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px]">
-                           <button onClick={() => setEditingProduct(product)} className="p-2 rounded-xl bg-[#D4AF37] text-black shadow-lg hover:scale-110 transition-all"><Edit2 size={14} /></button>
-                           <button onClick={() => handleDeleteProduct(product.id)} className="p-2 rounded-xl bg-[#E53E3E] text-white shadow-lg hover:scale-110 transition-all"><Trash2 size={14} /></button>
+                          <button onClick={() => setEditingProduct(product)} className="p-2 rounded-xl bg-[#D4AF37] text-black shadow-lg hover:scale-110 transition-all"><Edit2 size={14} /></button>
+                          <button onClick={() => handleDeleteProduct(product.id)} className="p-2 rounded-xl bg-[#E53E3E] text-white shadow-lg hover:scale-110 transition-all"><Trash2 size={14} /></button>
                         </div>
                       </div>
                       <div className="p-4 flex-1 flex flex-col justify-between bg-gradient-to-b from-transparent to-black/20">
-                         <div><p className="text-[10px] font-black text-white truncate uppercase tracking-tight">{product.name}</p><p className="text-[7px] font-bold text-white/20 uppercase tracking-[0.1em] mt-0.5">{product.is_combo_item ? 'Combo' : `Tier V${product.vip_level}`}</p></div>
-                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5"><p className="text-[11px] font-black text-[#F5F5F5]">${product.price}</p><p className="text-[8px] font-black text-[#38A169]">+{product.commission_rate || product.commission}%</p></div>
+                        <div><p className="text-[10px] font-black text-white truncate uppercase tracking-tight">{product.name}</p><p className="text-[7px] font-bold text-white/20 uppercase tracking-[0.1em] mt-0.5">{product.is_combo_item ? 'Combo' : `Tier V${product.vip_level}`}</p></div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5"><p className="text-[11px] font-black text-[#F5F5F5]">${product.price}</p><p className="text-[8px] font-black text-[#38A169]">+{product.commission_rate || product.commission}%</p></div>
                       </div>
                     </div>
                   ))}
@@ -586,88 +587,87 @@ export default function AdminDashboard() {
 
             {activeTab === "vas" && isMasterAdmin && (
               <motion.div key="vas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-                 <div className="flex justify-between items-center px-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">VA Fleet Control</p>
-                    <button onClick={handleCreateVA} 
-                      style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D", boxShadow: "0 0 30px rgba(212,175,55,0.4)" }}
-                      className="h-12 px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all">
-                      <UserPlus size={18} /> Create VA Account
-                    </button>
-                 </div>
-                 <div className="space-y-3">
-                    {data.vas.map((va: any) => {
-                        const perms = Array.isArray(va.va_permissions) ? (va.va_permissions[0] || {}) : (va.va_permissions || {});
-                        return (
-                          <div key={va.id} className="p-6 rounded-[32px] bg-[#1A1A1A] border border-white/5">
-                             <div className="flex justify-between items-center mb-6">
-                                <div className="flex items-center gap-4">
-                                   <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/20"><Briefcase size={24} /></div>
-                                   <div><p className="text-sm font-black text-white">{va.username}</p><p className={`text-[9px] font-black uppercase mt-0.5 ${va.status === 'approved' ? 'text-[#38A169]' : 'text-[#D4AF37]'}`}>{va.status}</p></div>
-                                </div>
-                                <div className="flex gap-2">
-                                  {va.status === 'pending' ? (
-                                    <><button onClick={() => handleVAStatus(va.id, 'approve')} className="p-3 bg-[#38A169]/10 text-[#38A169] rounded-xl"><CheckCircle2 size={18} /></button><button onClick={() => handleVAStatus(va.id, 'reject')} className="p-3 bg-[#E53E3E]/10 text-[#E53E3E] rounded-xl"><XCircle size={18} /></button></>
-                                  ) : (
-                                    <button onClick={() => handleVADelete(va.id)} className="px-4 py-2 rounded-xl bg-[#E53E3E]/10 text-[9px] font-black uppercase text-[#E53E3E] border border-[#E53E3E]/20 hover:bg-[#E53E3E]/20">Delete Account</button>
-                                  )}
-                                </div>
-                             </div>
-                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {['can_edit', 'can_reset_tasks', 'can_combo', 'can_approve_requests', 'can_approve_finance'].map(p => {
-                                   const active = !!perms[p];
-                                   return (
-                                     <button key={p} onClick={() => toggleVAPermission(va.id, p, !active)} 
-                                        className={`group relative p-4 rounded-2xl border transition-all flex items-center justify-between overflow-hidden ${
-                                          active 
-                                          ? 'border-[#D4AF37]/50 bg-[#D4AF37]/5 shadow-[0_0_20px_rgba(212,175,55,0.1)]' 
-                                          : 'border-white/5 bg-black/20 opacity-60'
-                                        }`}>
-                                        <div className="flex items-center gap-3">
-                                          <div className={`p-2 rounded-lg transition-colors ${active ? 'bg-gold-gradient text-black' : 'bg-white/5 text-white/20'}`}>
-                                            {p === 'can_combo' ? <Layers size={14} /> : 
-                                             p === 'can_edit' ? <Edit2 size={14} /> :
-                                             p === 'can_approve_finance' ? <Wallet size={14} /> :
-                                             p === 'can_approve_requests' ? <Crown size={14} /> :
-                                             <ClipboardCheck size={14} />}
-                                          </div>
-                                          <span className={`text-[10px] font-black uppercase tracking-widest ${active ? 'text-white' : 'text-white/40'}`}>
-                                            {p.replace('can_', '').replace('_', ' ')}
-                                          </span>
-                                        </div>
-                                        
-                                        <div className={`w-8 h-4 rounded-full relative transition-colors ${active ? 'bg-[#38A169]' : 'bg-white/10'}`}>
-                                          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${active ? 'left-4.5' : 'left-0.5'}`} />
-                                        </div>
-
-                                        {active && (
-                                          <div className="absolute inset-0 bg-gold-gradient opacity-0 group-hover:opacity-10 transition-opacity" />
-                                        )}
-                                     </button>
-                                   );
-                                })}
-                             </div>
+                <div className="flex justify-between items-center px-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">VA Fleet Control</p>
+                  <button onClick={handleCreateVA}
+                    style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D", boxShadow: "0 0 30px rgba(212,175,55,0.4)" }}
+                    className="h-12 px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all">
+                    <UserPlus size={18} /> Create VA Account
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {data.vas.map((va: any) => {
+                    const perms = Array.isArray(va.va_permissions) ? (va.va_permissions[0] || {}) : (va.va_permissions || {});
+                    return (
+                      <div key={va.id} className="p-6 rounded-[32px] bg-[#1A1A1A] border border-white/5">
+                        <div className="flex justify-between items-center mb-6">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/20"><Briefcase size={24} /></div>
+                            <div><p className="text-sm font-black text-white">{va.username}</p><p className={`text-[9px] font-black uppercase mt-0.5 ${va.status === 'approved' ? 'text-[#38A169]' : 'text-[#D4AF37]'}`}>{va.status}</p></div>
                           </div>
-                        );
-                    })}
-                 </div>
+                          <div className="flex gap-2">
+                            {va.status === 'pending' ? (
+                              <><button onClick={() => handleVAStatus(va.id, 'approve')} className="p-3 bg-[#38A169]/10 text-[#38A169] rounded-xl"><CheckCircle2 size={18} /></button><button onClick={() => handleVAStatus(va.id, 'reject')} className="p-3 bg-[#E53E3E]/10 text-[#E53E3E] rounded-xl"><XCircle size={18} /></button></>
+                            ) : (
+                              <button onClick={() => handleVADelete(va.id)} className="px-4 py-2 rounded-xl bg-[#E53E3E]/10 text-[9px] font-black uppercase text-[#E53E3E] border border-[#E53E3E]/20 hover:bg-[#E53E3E]/20">Delete Account</button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {['can_edit', 'can_reset_tasks', 'can_combo', 'can_approve_requests', 'can_approve_finance'].map(p => {
+                            const active = !!perms[p];
+                            return (
+                              <button key={p} onClick={() => toggleVAPermission(va.id, p, !active)}
+                                className={`group relative p-4 rounded-2xl border transition-all flex items-center justify-between overflow-hidden ${active
+                                    ? 'border-[#D4AF37]/50 bg-[#D4AF37]/5 shadow-[0_0_20px_rgba(212,175,55,0.1)]'
+                                    : 'border-white/5 bg-black/20 opacity-60'
+                                  }`}>
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg transition-colors ${active ? 'bg-gold-gradient text-black' : 'bg-white/5 text-white/20'}`}>
+                                    {p === 'can_combo' ? <Layers size={14} /> :
+                                      p === 'can_edit' ? <Edit2 size={14} /> :
+                                        p === 'can_approve_finance' ? <Wallet size={14} /> :
+                                          p === 'can_approve_requests' ? <Crown size={14} /> :
+                                            <ClipboardCheck size={14} />}
+                                  </div>
+                                  <span className={`text-[10px] font-black uppercase tracking-widest ${active ? 'text-white' : 'text-white/40'}`}>
+                                    {p.replace('can_', '').replace('_', ' ')}
+                                  </span>
+                                </div>
+
+                                <div className={`w-8 h-4 rounded-full relative transition-colors ${active ? 'bg-[#38A169]' : 'bg-white/10'}`}>
+                                  <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${active ? 'left-4.5' : 'left-0.5'}`} />
+                                </div>
+
+                                {active && (
+                                  <div className="absolute inset-0 bg-gold-gradient opacity-0 group-hover:opacity-10 transition-opacity" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </motion.div>
             )}
 
             {activeTab === "level-requests" && (
               <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                 {data.levelRequests.map((req: any) => (
-                    <div key={req._id} className="p-6 rounded-[32px] bg-[#1A1A1A] border border-white/5 flex items-center justify-between">
-                       <div className="flex items-center gap-4">
-                          <div className="h-12 w-12 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]"><Crown size={24} /></div>
-                          <div><p className="text-sm font-black text-white">{req.username}</p><p className="text-[9px] font-bold text-white/20 uppercase">Requesting VIP {req.vipLevelRequest}</p></div>
-                       </div>
-                       <button onClick={() => updateVIP(req._id, req.vipLevelRequest)} disabled={!canApproveRequests}
-                        className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all ${canApproveRequests ? 'bg-gold-gradient text-black' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}>
-                        Approve
-                       </button>
+                {data.levelRequests.map((req: any) => (
+                  <div key={req._id} className="p-6 rounded-[32px] bg-[#1A1A1A] border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]"><Crown size={24} /></div>
+                      <div><p className="text-sm font-black text-white">{req.username}</p><p className="text-[9px] font-bold text-white/20 uppercase">Requesting VIP {req.vipLevelRequest}</p></div>
                     </div>
-                 ))}
-                 {data.levelRequests.length === 0 && <div className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest">No pending requests</div>}
+                    <button onClick={() => updateVIP(req._id, req.vipLevelRequest)} disabled={!canApproveRequests}
+                      className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all ${canApproveRequests ? 'bg-gold-gradient text-black' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}>
+                      Approve
+                    </button>
+                  </div>
+                ))}
+                {data.levelRequests.length === 0 && <div className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest">No pending requests</div>}
               </motion.div>
             )}
           </AnimatePresence>
@@ -678,23 +678,23 @@ export default function AdminDashboard() {
         {newVA && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-sm rounded-[40px] p-8 bg-[#141414] border border-[#D4AF37]/30 shadow-[0_0_50px_rgba(212,175,55,0.2)] text-center">
-               <div className="h-20 w-20 rounded-3xl bg-gold-gradient mx-auto mb-6 flex items-center justify-center shadow-xl shadow-[#D4AF37]/20">
-                  <ShieldCheck size={40} className="text-[#0D0D0D]" />
-               </div>
-               <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">VA Account Created</h3>
-               <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-8">Generated Credentials</p>
-               <div className="space-y-4 mb-8">
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between group">
-                     <div className="text-left"><p className="text-[8px] font-black text-white/20 uppercase mb-1">Username</p><p className="text-sm font-black text-white">{newVA.username}</p></div>
-                     <button onClick={() => copyToClipboard(newVA.username)} className="p-2 text-white/20 hover:text-[#D4AF37] transition-all"><Copy size={16} /></button>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between group">
-                     <div className="text-left"><p className="text-[8px] font-black text-white/20 uppercase mb-1">Generated Password</p><p className="text-sm font-black text-[#D4AF37] tracking-wider">{newVA.password}</p></div>
-                     <button onClick={() => copyToClipboard(newVA.password)} className="p-2 text-white/20 hover:text-[#D4AF37] transition-all"><Copy size={16} /></button>
-                  </div>
-               </div>
-               <p className="text-[9px] font-bold text-[#E53E3E] uppercase tracking-widest mb-8 flex items-center justify-center gap-2 animate-pulse"><AlertCircle size={12} /> Save these details now</p>
-               <button onClick={() => setNewVA(null)} className="btn-gold w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg">I Have Saved Them</button>
+              <div className="h-20 w-20 rounded-3xl bg-gold-gradient mx-auto mb-6 flex items-center justify-center shadow-xl shadow-[#D4AF37]/20">
+                <ShieldCheck size={40} className="text-[#0D0D0D]" />
+              </div>
+              <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">VA Account Created</h3>
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-8">Generated Credentials</p>
+              <div className="space-y-4 mb-8">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between group">
+                  <div className="text-left"><p className="text-[8px] font-black text-white/20 uppercase mb-1">Username</p><p className="text-sm font-black text-white">{newVA.username}</p></div>
+                  <button onClick={() => copyToClipboard(newVA.username)} className="p-2 text-white/20 hover:text-[#D4AF37] transition-all"><Copy size={16} /></button>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between group">
+                  <div className="text-left"><p className="text-[8px] font-black text-white/20 uppercase mb-1">Generated Password</p><p className="text-sm font-black text-[#D4AF37] tracking-wider">{newVA.password}</p></div>
+                  <button onClick={() => copyToClipboard(newVA.password)} className="p-2 text-white/20 hover:text-[#D4AF37] transition-all"><Copy size={16} /></button>
+                </div>
+              </div>
+              <p className="text-[9px] font-bold text-[#E53E3E] uppercase tracking-widest mb-8 flex items-center justify-center gap-2 animate-pulse"><AlertCircle size={12} /> Save these details now</p>
+              <button onClick={() => setNewVA(null)} className="btn-gold w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg">I Have Saved Them</button>
             </motion.div>
           </motion.div>
         )}
@@ -704,9 +704,9 @@ export default function AdminDashboard() {
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-sm rounded-[32px] p-8 bg-[#141414] border border-[#D4AF37]/20 shadow-2xl">
               <div className="flex justify-between items-center mb-8"><h3 className="text-sm font-black uppercase text-white tracking-widest">Update Profile</h3><button onClick={() => setEditingUser(null)}><XCircle size={24} className="text-white/30" /></button></div>
               <form onSubmit={handleEditSubmit} className="space-y-6">
-                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Balance ($)</label><input type="number" step="0.01" value={editForm.balance} onChange={e => setEditForm({...editForm, balance: parseFloat(e.target.value)})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
-                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Wallet Address</label><input type="text" value={editForm.withdrawalAddress} onChange={e => setEditForm({...editForm, withdrawalAddress: e.target.value})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10"><div className="flex items-center gap-3"><Key size={18} className="text-[#D4AF37]" /><span className="text-[10px] font-black uppercase text-white/80">Lock Tasks</span></div><button type="button" onClick={() => setEditForm({...editForm, isTaskLocked: !editForm.isTaskLocked})} className={`w-12 h-6 rounded-full transition-all relative ${editForm.isTaskLocked ? 'bg-[#E53E3E]' : 'bg-white/10'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${editForm.isTaskLocked ? 'left-7' : 'left-1'}`} /></button></div>
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Balance ($)</label><input type="number" step="0.01" value={editForm.balance} onChange={e => setEditForm({ ...editForm, balance: parseFloat(e.target.value) })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Wallet Address</label><input type="text" value={editForm.withdrawalAddress} onChange={e => setEditForm({ ...editForm, withdrawalAddress: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10"><div className="flex items-center gap-3"><Key size={18} className="text-[#D4AF37]" /><span className="text-[10px] font-black uppercase text-white/80">Lock Tasks</span></div><button type="button" onClick={() => setEditForm({ ...editForm, isTaskLocked: !editForm.isTaskLocked })} className={`w-12 h-6 rounded-full transition-all relative ${editForm.isTaskLocked ? 'bg-[#E53E3E]' : 'bg-white/10'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${editForm.isTaskLocked ? 'left-7' : 'left-1'}`} /></button></div>
                 <button type="submit" style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D" }} className="w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#D4AF37]/30">Save Changes</button>
               </form>
             </motion.div>
@@ -716,19 +716,19 @@ export default function AdminDashboard() {
         {comboUser && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-md rounded-[32px] p-8 bg-[#141414] border border-[#38A169]/20 max-h-[90vh] overflow-y-auto luxury-scrollbar shadow-2xl">
-               <div className="flex justify-between items-center mb-8"><div><h3 className="text-sm font-black uppercase text-white">Combo Scheduler</h3><p className="text-[10px] font-bold text-white/40 mt-1">{comboUser.username}</p></div><button onClick={() => setComboUser(null)}><XCircle className="text-white/30" size={24} /></button></div>
-               {userCombos.length > 0 && <div className="mb-8 space-y-3"><p className="text-[9px] font-black uppercase text-[#38A169]">Active Schedules</p>{userCombos.map((c, idx) => (<div key={idx} className="p-4 rounded-2xl bg-[#38A169]/5 border border-[#38A169]/20 flex items-center justify-between"><div><p className="text-xs font-black text-white">Pos: {c.position} | {c.items_count || c.itemsCount} Items</p><p className="text-[9px] font-bold text-white/40 uppercase">${c.price} | {c.commission}%</p></div><button onClick={() => handleDeleteCombo(c.id)} className="p-2 text-[#E53E3E]"><Trash2 size={16} /></button></div>))}</div>}
-               <form onSubmit={handleComboSubmit} className="space-y-6">
-                  {comboForms.map((form, index) => (
-                    <div key={index} className="p-6 rounded-[24px] bg-white/5 border border-white/10 space-y-5">
-                       <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-[#D4AF37]">Set {index + 1}</span>{comboForms.length > 1 && <button type="button" onClick={() => setComboForms(comboForms.filter((_, i) => i !== index))} className="text-[#E53E3E] text-[9px] font-black uppercase">Remove</button>}</div>
-                       <div className="grid grid-cols-2 gap-4"><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Position</label><input type="number" value={form.position} onChange={e => { const n = [...comboForms]; n[index].position = parseInt(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Items</label><input type="number" value={form.itemsCount} onChange={e => { const n = [...comboForms]; n[index].itemsCount = parseInt(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div></div>
-                       <div className="grid grid-cols-2 gap-4"><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Price ($)</label><input type="number" value={form.price} onChange={e => { const n = [...comboForms]; n[index].price = parseFloat(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Comm (%)</label><input type="number" value={form.commission} onChange={e => { const n = [...comboForms]; n[index].commission = parseFloat(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div></div>
-                    </div>
-                  ))}
-                  <button type="button" onClick={() => setComboForms([...comboForms, { position: 5, itemsCount: 3, price: 100, commission: 20 }])} className="w-full py-4 rounded-2xl border-2 border-dashed border-white/10 text-white/40 text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:border-[#D4AF37]/30 hover:text-white transition-all"><Plus size={14} /> Add Another</button>
-                  <button type="submit" className="w-full py-4 rounded-2xl bg-[#38A169] text-white font-black uppercase shadow-xl shadow-[#38A169]/30">Confirm All Schedules</button>
-               </form>
+              <div className="flex justify-between items-center mb-8"><div><h3 className="text-sm font-black uppercase text-white">Combo Scheduler</h3><p className="text-[10px] font-bold text-white/40 mt-1">{comboUser.username}</p></div><button onClick={() => setComboUser(null)}><XCircle className="text-white/30" size={24} /></button></div>
+              {userCombos.length > 0 && <div className="mb-8 space-y-3"><p className="text-[9px] font-black uppercase text-[#38A169]">Active Schedules</p>{userCombos.map((c, idx) => (<div key={idx} className="p-4 rounded-2xl bg-[#38A169]/5 border border-[#38A169]/20 flex items-center justify-between"><div><p className="text-xs font-black text-white">Pos: {c.position} | {c.items_count || c.itemsCount} Items</p><p className="text-[9px] font-bold text-white/40 uppercase">${c.price} | {c.commission}%</p></div><button onClick={() => handleDeleteCombo(c.id)} className="p-2 text-[#E53E3E]"><Trash2 size={16} /></button></div>))}</div>}
+              <form onSubmit={handleComboSubmit} className="space-y-6">
+                {comboForms.map((form, index) => (
+                  <div key={index} className="p-6 rounded-[24px] bg-white/5 border border-white/10 space-y-5">
+                    <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-[#D4AF37]">Set {index + 1}</span>{comboForms.length > 1 && <button type="button" onClick={() => setComboForms(comboForms.filter((_, i) => i !== index))} className="text-[#E53E3E] text-[9px] font-black uppercase">Remove</button>}</div>
+                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Position</label><input type="number" value={form.position} onChange={e => { const n = [...comboForms]; n[index].position = parseInt(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Items</label><input type="number" value={form.itemsCount} onChange={e => { const n = [...comboForms]; n[index].itemsCount = parseInt(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div></div>
+                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Price ($)</label><input type="number" value={form.price} onChange={e => { const n = [...comboForms]; n[index].price = parseFloat(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div><div><label className="text-[8px] font-black uppercase text-white/30 block mb-2">Comm (%)</label><input type="number" value={form.commission} onChange={e => { const n = [...comboForms]; n[index].commission = parseFloat(e.target.value); setComboForms(n); }} className="input-gold w-full rounded-xl py-3 px-4 text-xs font-bold text-white" /></div></div>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setComboForms([...comboForms, { position: 5, itemsCount: 3, price: 100, commission: 20 }])} className="w-full py-4 rounded-2xl border-2 border-dashed border-white/10 text-white/40 text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:border-[#D4AF37]/30 hover:text-white transition-all"><Plus size={14} /> Add Another</button>
+                <button type="submit" className="w-full py-4 rounded-2xl bg-[#38A169] text-white font-black uppercase shadow-xl shadow-[#38A169]/30">Confirm All Schedules</button>
+              </form>
             </motion.div>
           </motion.div>
         )}
@@ -738,13 +738,13 @@ export default function AdminDashboard() {
             <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} className="w-full max-sm rounded-[32px] p-8 bg-[#141414] border border-[#D4AF37]/40 shadow-[0_0_50px_rgba(212,175,55,0.2)] max-h-[90vh] overflow-y-auto luxury-scrollbar">
               <div className="flex justify-between items-center mb-8"><h3 className="text-sm font-black uppercase text-white tracking-widest">Store Inventory</h3><button onClick={() => setShowAddProduct(false)}><XCircle className="text-white/30" size={24} /></button></div>
               <form onSubmit={handleProductSubmit} className="space-y-6">
-                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Name</label><input type="text" required value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
-                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Image URL</label><input type="text" required value={productForm.image} onChange={e => setProductForm({...productForm, image: e.target.value})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-mono text-xs" /></div>
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Name</label><input type="text" required value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Image URL</label><input type="text" required value={productForm.image} onChange={e => setProductForm({ ...productForm, image: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-mono text-xs" /></div>
                 <div className="grid grid-cols-2 gap-4">
-                   <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Price ($)</label><input type="number" required value={productForm.price} onChange={e => setProductForm({...productForm, price: parseFloat(e.target.value)})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
-                   <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Comm (%)</label><input type="number" required value={productForm.commission} onChange={e => setProductForm({...productForm, commission: parseFloat(e.target.value)})} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                  <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Price ($)</label><input type="number" required value={productForm.price} onChange={e => setProductForm({ ...productForm, price: parseFloat(e.target.value) })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                  <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Comm (%)</label><input type="number" required value={productForm.commission} onChange={e => setProductForm({ ...productForm, commission: parseFloat(e.target.value) })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
                 </div>
-                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Assignment</label><div className="grid grid-cols-2 gap-2">{[1, 2, 3].map(lvl => (<button key={lvl} type="button" onClick={() => setProductForm({...productForm, vip_level: lvl, is_combo_item: false})} style={productForm.vip_level === lvl && !productForm.is_combo_item ? { background: GOLDEN_GRADIENT, color: "#0D0D0D", border: "none" } : {}} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${productForm.vip_level === lvl && !productForm.is_combo_item ? '' : 'bg-white/5 text-white/30 border-white/10'}`}>V{lvl}</button>))} <button type="button" onClick={() => setProductForm({...productForm, is_combo_item: true})} style={productForm.is_combo_item ? { background: "#38A169", color: "white", border: "none" } : {}} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${productForm.is_combo_item ? '' : 'bg-white/5 text-white/30 border-white/10'}`}>Combo</button></div></div>
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Assignment</label><div className="grid grid-cols-2 gap-2">{[1, 2, 3].map(lvl => (<button key={lvl} type="button" onClick={() => setProductForm({ ...productForm, vip_level: lvl, is_combo_item: false })} style={productForm.vip_level === lvl && !productForm.is_combo_item ? { background: GOLDEN_GRADIENT, color: "#0D0D0D", border: "none" } : {}} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${productForm.vip_level === lvl && !productForm.is_combo_item ? '' : 'bg-white/5 text-white/30 border-white/10'}`}>V{lvl}</button>))} <button type="button" onClick={() => setProductForm({ ...productForm, is_combo_item: true })} style={productForm.is_combo_item ? { background: "#38A169", color: "white", border: "none" } : {}} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${productForm.is_combo_item ? '' : 'bg-white/5 text-white/30 border-white/10'}`}>Combo</button></div></div>
                 <button type="submit" style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D" }} className="w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl shadow-[#D4AF37]/40 mt-4">Add Product</button>
               </form>
             </motion.div>

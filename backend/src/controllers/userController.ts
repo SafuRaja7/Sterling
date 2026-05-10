@@ -35,7 +35,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
     if (userError || !user) throw new Error('User not found');
 
     // Fetch pending task if any
-    let pendingTask = null;
+    let pendingTask: any = null;
     if (user.pending_task) {
       const { data: taskData } = await supabase
         .from('tasks')
@@ -280,7 +280,7 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       status: 'pending',
     };
 
-    let selectedProducts = [];
+    let selectedProducts: any[] = [];
 
     if (combo) {
       taskData.price = combo.price;

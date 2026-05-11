@@ -20,6 +20,15 @@ dotenv.config();
 // Connect to database
 connectDB();
 
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://sterlingshopifymarket.online',
+  'https://www.sterlingshopifymarket.online'
+].filter(Boolean) as string[];
+
 const app = express();
 app.set('trust proxy', 1); // Trust Render's proxy headers
 const server = http.createServer(app);
@@ -27,8 +36,15 @@ const server = http.createServer(app);
 // Socket.io setup for real-time admin updates
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin: any, callback: any) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
+    credentials: true
   },
 });
 
@@ -44,7 +60,13 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(morgan('dev'));

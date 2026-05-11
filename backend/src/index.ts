@@ -14,7 +14,6 @@ import uploadRoutes from './routes/uploadRoutes';
 import chatRoutes from './routes/chatRoutes';
 import vaAuthRoutes from './routes/vaAuthRoutes';
 
-// Load env vars
 dotenv.config();
 
 // Connect to database

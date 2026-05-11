@@ -703,8 +703,6 @@ export const approveLevelUnlock = async (req: Request, res: Response) => {
         .from('users')
         .update({
           vip_level: level,
-          completed_tasks_today: 0, // Reset counter for the new level
-          last_task_reset: new Date().toISOString(),
           updated_at: new Date()
         })
         .eq('id', userId);

@@ -125,8 +125,8 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       username: user.username,
       role: user.role,
       balance: user.balance,
-      vipLevel: user.vip_level,
-      approvedVipLevel: maxApprovedLevel, 
+      vipLevel: user.vip_level, // This is the MAX unlocked level
+      approvedVipLevel: user.vip_level, 
       vipLevelRequest: latestTx?.amount || 0,
       vipLevelRequestStatus: latestTx?.status || 'none',
       vipLevelApprovedAt: user.updated_at,
@@ -161,8 +161,16 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
 
     if (userError || !user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (user.completed_tasks_today >= 20) {
-      return res.status(400).json({ success: false, message: 'Session completed for this VIP room. Please wait for the daily reset or recharge to upgrade.' });
+    if (user.completed_tasks_today >= 60) {
+      return res.status(400).json({ success: false, message: 'You have completed all your levels. Thank you, come back tomorrow!' });
+    }
+
+    // Determine current level based on progress
+    const currentLevel = Math.floor(user.completed_tasks_today / 20) + 1;
+
+    if (user.completed_tasks_today % 20 === 0 && user.completed_tasks_today > 0) {
+        // This should have been caught by frontend "Enter" logic, but just in case
+        return res.status(400).json({ success: false, message: 'Level completed. Please enter the next VIP room.' });
     }
 
     if (user.pending_task) {
@@ -183,28 +191,11 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
 
     if (!settings) return res.status(500).json({ success: false, message: 'Task settings not configured' });
 
-    // --- VIRTUAL APPROVAL CHECK ---
-    const { data: approvedTxs } = await supabase
-      .from('transactions')
-      .select('amount, created_at, updated_at')
-      .eq('user_id', userId)
-      .eq('type', 'deposit')
-      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
-      .eq('status', 'approved');
-
-    const lastReset = user.last_task_reset ? new Date(user.last_task_reset) : new Date(0);
-    const validTxs = (approvedTxs || []).filter(tx => {
-      const txTime = new Date(tx.updated_at || tx.created_at).getTime();
-      const resetTime = lastReset.getTime();
-      // Grace window for approvals
-      return txTime > resetTime - 3600000;
-    });
-    const maxApproved = validTxs.reduce((max, t) => Math.max(max, Number(t.amount)), 0);
-
-    if (user.vip_level === 0 || user.vip_level > maxApproved) {
+    // Check if the user is in a room they haven't unlocked yet
+    if (user.vip_level < currentLevel) {
       return res.status(403).json({
         success: false,
-        message: `VIP Level ${user.vip_level || 1} is not yet approved for today's tasks. Please request an unlock.`,
+        message: `VIP Level ${currentLevel} is not yet approved. Please request an unlock.`,
         code: 'LEVEL_NOT_APPROVED'
       });
     }
@@ -233,8 +224,8 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ success: false, message: 'Your task access has been locked by admin' });
     }
 
-    if (user.completed_tasks_today >= 20) {
-      return res.status(400).json({ success: false, message: 'Session completed. Please wait for next cycle or recharge to upgrade.' });
+    if (user.completed_tasks_today >= 60) {
+      return res.status(400).json({ success: false, message: 'You have completed all your levels. Thank you, come back tomorrow!' });
     }
 
     const nextTaskNumber = (user.completed_tasks_today || 0) + 1;
@@ -454,20 +445,9 @@ export const completeTask = async (req: AuthRequest, res: Response) => {
     const newSessionCommission = Number(user.current_session_commission) + Number(task.commission);
     let newCompletedTasks = user.completed_tasks_today + 1;
 
-    // Auto-Upgrade VIP Level if completed current cycle and have enough balance
-    let newVipLevel = user.vip_level;
-    if (newCompletedTasks >= 20 && user.vip_level < 3) {
-      const { data: nextTier } = await supabase
-        .from('task_settings')
-        .select('min_access_balance')
-        .eq('vip_level', user.vip_level + 1)
-        .single();
-        
-      if (nextTier && newBalance >= nextTier.min_access_balance) {
-        newVipLevel = user.vip_level + 1;
-        newCompletedTasks = 0; // Reset task counter for the new level
-      }
-    }
+    // SEQUENTIAL TASK PROGRESSION (0-60)
+    const newCompletedTasks = user.completed_tasks_today + 1;
+    let newVipLevel = user.vip_level; // Stay at current unlocked level
 
     const updateData: any = { 
       balance: newBalance,

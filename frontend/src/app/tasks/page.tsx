@@ -44,10 +44,17 @@ export default function Tasks() {
     }
   };
 
-  const startMatching = async () => {
-    const isCompletedTierView = viewTier !== null && viewTier < (user?.vipLevel || 1);
-    if (isCompletedTierView || !user || (user.completedTasksToday ?? 0) >= 20) {
-      toast.error(isCompletedTierView ? "Daily task limit reached for this level" : "Daily task limit reached. Contact support to refresh task"); return;
+    const tierLevel = viewTier || 1;
+    const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
+    
+    if (!user || tasksInThisTier >= 20) {
+      toast.error("Daily task limit reached for this level. Move to next level or wait for reset."); 
+      return;
+    }
+    
+    if (user.completedTasksToday >= 60) {
+      toast.error("You have completed all your levels. Thank you, come back tomorrow!");
+      return;
     }
     setMatching(true);
     try {
@@ -173,17 +180,17 @@ export default function Tasks() {
             {/* Progress */}
             <div className="rounded-[24px] p-6" style={{ background: "#1A1A1A", border: "1px solid rgba(212,175,55,0.15)", borderTop: "2px solid #D4AF37" }}>
               {(() => {
-                const isCompletedTierView = viewTier !== null && viewTier < (user.vipLevel || 1);
-                const displayTasks = isCompletedTierView ? 20 : (user.completedTasksToday ?? 0);
-                const displayVip = viewTier || user.vipLevel || 1;
+                const tierLevel = viewTier || 1;
+                // Calculate progress for THIS specific tier
+                const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
                 
                 return (
                   <>
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)]">Today's Progress (VIP {displayVip})</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)]">Operation Progress (VIP {tierLevel})</p>
                         <p className="text-2xl font-black text-[#F5F5F5] mt-1">
-                          <span className="text-gold-gradient">{displayTasks}</span>
+                          <span className="text-gold-gradient">{tasksInThisTier}</span>
                           <span className="text-[rgba(245,245,245,0.3)] text-lg">/20</span>
                         </p>
                       </div>
@@ -194,7 +201,7 @@ export default function Tasks() {
                     <div className="h-2 rounded-full bg-[#252525] overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${Math.min((displayTasks / 20) * 100, 100)}%` }}
+                        animate={{ width: `${Math.min((tasksInThisTier / 20) * 100, 100)}%` }}
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="h-full rounded-full"
                         style={{ background: "linear-gradient(to right, #A08020, #D4AF37, #F0D060)" }}
@@ -275,18 +282,18 @@ export default function Tasks() {
             {tiers.map((tier, i) => {
               const requiredBalance = tier.min_access_balance || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
               
-              const isApproved = (user.approvedVipLevel || 0) >= tier.vip_level;
+              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level;
               const isPending = user.vipLevelRequest === tier.vip_level && user.vipLevelRequestStatus === 'pending';
-              const isRejected = user.vipLevelRequest === tier.vip_level && user.vipLevelRequestStatus === 'rejected';
               
-              const isCompleted = tier.vip_level < (user.approvedVipLevel || 0) || (tier.vip_level === user.vipLevel && (user.completedTasksToday ?? 0) >= 20);
+              const tasksDoneInThisLevel = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
+              const isLevelCompleted = tasksDoneInThisLevel >= 20;
+              const isPreviousLevelCompleted = tier.vip_level === 1 || user.completedTasksToday >= (tier.vip_level - 1) * 20;
               
-              const allFinished = user.vipLevel === 3 && (user.completedTasksToday ?? 0) >= 20;
-              const displayCompleted = isCompleted || (allFinished && tier.vip_level <= 3);
+              const isEligible = !isUnlocked && !isPending && user.balance >= requiredBalance && isPreviousLevelCompleted;
+              const isLocked = !isUnlocked && !isPending && !isEligible;
+              
+              const isCurrentRoom = isUnlocked && !isLevelCompleted && isPreviousLevelCompleted;
 
-              const isCurrentRoom = user.vipLevel === tier.vip_level && !displayCompleted && isApproved;
-
-              
               const tierColors: Record<number, string> = {
                 1: "#3b82f6", // Blue
                 2: "#8b5cf6", // Purple
@@ -304,56 +311,64 @@ export default function Tasks() {
                   transition={{ delay: i * 0.1 }}
                   className="relative overflow-hidden luxury-glass rounded-[28px] p-6 group transition-all"
                   style={{ 
-                    opacity: isApproved || isCompleted ? 1 : 0.6,
-                    borderLeft: isCurrentRoom ? `6px solid ${accentColor}` : isCompleted ? `2px solid #38A169` : isApproved ? `2px solid ${accentColor}` : "1px solid rgba(245,245,245,0.05)",
-                    background: isCurrentRoom ? "rgba(255,255,255,0.02)" : undefined
+                    opacity: isLocked ? 0.4 : 1,
+                    borderLeft: isCurrentRoom ? `6px solid ${accentColor}` : isLevelCompleted ? `2px solid #38A169` : isUnlocked ? `2px solid ${accentColor}` : "1px solid rgba(245,245,245,0.05)",
+                    background: isCurrentRoom ? "rgba(255,255,255,0.02)" : undefined,
+                    filter: isLocked ? 'grayscale(100%)' : 'none'
                   }}
                 >
                   {/* Ribbon Badge */}
                   <div className="absolute top-0 left-0 px-4 py-1.5 rounded-br-2xl text-[9px] font-black uppercase tracking-widest text-white shadow-xl z-20"
-                    style={{ background: isCompleted ? "#38A169" : isCurrentRoom ? accentColor : isApproved ? `${accentColor}80` : "#252525" }}>
-                    {isCompleted ? 'Completed' : isCurrentRoom ? 'Current Room' : `VIP ${tier.vip_level}`}
+                    style={{ background: isLevelCompleted ? "#38A169" : isCurrentRoom ? accentColor : isUnlocked ? `${accentColor}80` : "#252525" }}>
+                    {isLevelCompleted ? 'Completed' : isCurrentRoom ? 'Current' : isLocked ? 'Locked' : `VIP ${tier.vip_level}`}
                   </div>
 
                   <div className="flex items-center gap-6 mt-4">
                     <div className="relative h-20 w-20 rounded-[22px] bg-white/5 border flex items-center justify-center overflow-hidden group-hover:border-white/20 transition-all"
                       style={{ borderColor: isCurrentRoom ? `${accentColor}50` : "rgba(255,255,255,0.1)" }}>
                       <img src="/images/icons/shopify.png" alt="Shopify" className="w-full h-full object-cover" 
-                        style={{ opacity: isApproved ? 1 : 0.3, filter: isApproved ? 'none' : 'grayscale(100%)' }} />
+                        style={{ opacity: isLocked ? 0.3 : 1 }} />
+                      {isLocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><Lock size={20} className="text-white/40" /></div>}
                     </div>
 
                     <div className="flex-1">
-                      <h3 className={`text-lg font-black tracking-tight mb-3 ${isApproved ? "text-white" : "text-white/40"}`}>
+                      <h3 className={`text-lg font-black tracking-tight mb-3 ${isLocked ? "text-white/40" : "text-white"}`}>
                         VIP {tier.vip_level} Shopify
                       </h3>
                       <div className="flex flex-wrap gap-3">
                         <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
-                          style={{ background: isApproved ? `${accentColor}15` : "rgba(255,255,255,0.03)", border: `1px solid ${isApproved ? `${accentColor}30` : "rgba(255,255,255,0.05)"}` }}>
-                          <span style={{ color: isApproved ? accentColor : "rgba(255,255,255,0.2)" }}>{commission}%</span>
+                          style={{ background: isUnlocked ? `${accentColor}15` : "rgba(255,255,255,0.03)", border: `1px solid ${isUnlocked ? `${accentColor}30` : "rgba(255,255,255,0.05)"}` }}>
+                          <span style={{ color: isUnlocked ? accentColor : "rgba(255,255,255,0.2)" }}>{commission}%</span>
                         </div>
                         <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
-                          style={{ background: isApproved ? "rgba(212,175,55,0.05)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.15)" }}>
-                          <span className={isApproved ? "text-gold-gradient" : "text-white/30"}>
+                          style={{ background: "rgba(212,175,55,0.05)", border: "1px solid rgba(212,175,55,0.15)" }}>
+                          <span className={!isLocked ? "text-gold-gradient" : "text-white/30"}>
                             ${requiredBalance.toLocaleString()} USDT +
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {displayCompleted ? (
-                      <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#38A169]/20 text-[#38A169] border border-[#38A169]/30 hover:bg-[#38A169]/30 transition-colors">
+                    {isLevelCompleted ? (
+                      <div className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#38A169]/20 text-[#38A169] border border-[#38A169]/30">
                         Completed
-                      </button>
-                    ) : isApproved ? (
-                      <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0D0D0D] transition-colors">
-                        Enter
-                      </button>
+                      </div>
+                    ) : isUnlocked ? (
+                      isPreviousLevelCompleted ? (
+                        <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-6 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0D0D0D] transition-colors">
+                          Open
+                        </button>
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                          <Lock size={16} className="text-white/20" />
+                        </div>
+                      )
                     ) : isPending ? (
                       <button onClick={() => router.push("/support")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[8px] uppercase tracking-widest bg-white/5 border border-white/10 text-white/40 hover:text-[#D4AF37] hover:border-[#D4AF37]/30 transition-all flex-col">
                         <MessageSquare size={10} className="mb-1" />
                         <span>Contact Support</span>
                       </button>
-                    ) : (tier.vip_level === 1 && !isApproved) || (tier.vip_level === (user.vipLevel || 0) + 1 && (user.completedTasksToday ?? 0) >= 20 && user.balance >= requiredBalance) ? (
+                    ) : isEligible ? (
                       <button onClick={() => handleRequestUnlock(tier.vip_level)} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#D4AF37] text-[#0D0D0D] hover:bg-[#F0D060] transition-colors">
                         Unlock
                       </button>
@@ -363,6 +378,16 @@ export default function Tasks() {
                       </div>
                     )}
                   </div>
+
+                  {/* Sequential Error Hint */}
+                  {!isPreviousLevelCompleted && !isLocked && !isUnlocked && (
+                    <p className="text-[8px] font-bold text-[#E53E3E] uppercase mt-4 tracking-widest flex items-center gap-1.5">
+                      <AlertCircle size={10} /> Please complete Level {tier.vip_level - 1} first
+                    </p>
+                  )}
+                </motion.div>
+              );
+            })}
 
                   {/* Subtle Background Glow */}
                   {isCurrentRoom && (
@@ -374,7 +399,7 @@ export default function Tasks() {
             })}
 
             {/* Final Completion Message */}
-            {user.vipLevel === 3 && (user.completedTasksToday ?? 0) >= 20 && (
+            {user.completedTasksToday >= 60 && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -382,10 +407,10 @@ export default function Tasks() {
                 style={{ background: "linear-gradient(145deg, rgba(56,161,105,0.1), rgba(0,0,0,0.4))" }}
               >
                 <CheckCircle size={40} className="mx-auto text-[#38A169] mb-4" />
-                <h3 className="text-xl font-black text-[#F5F5F5] mb-2">Daily Operations Complete</h3>
+                <h3 className="text-xl font-black text-[#F5F5F5] mb-2">Operation Complete</h3>
                 <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-relaxed">
-                  You have successfully finished all available tasks for today.<br />
-                  Your operations will refresh after 24 hours.
+                  You have completed all your levels.<br />
+                  Thank you, come back tomorrow!
                 </p>
               </motion.div>
             )}

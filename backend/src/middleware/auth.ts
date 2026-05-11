@@ -77,6 +77,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       }
 
       req.user = { ...userProfile, _id: userProfile.id };
+      console.log(`--- AUTH SUCCESS: User ${userProfile.username} (${userProfile.role}) ---`);
       next();
     } catch (error: any) {
       console.error("Protection Middleware Failed:", error.message);
@@ -89,9 +90,14 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 
 export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
   const isMaster = req.user?.username?.toLowerCase().includes('admin');
-  if (isMaster || (req.user && req.user.role === 'admin')) {
+  const isAdmin = req.user && req.user.role === 'admin';
+  
+  console.log(`--- ADMIN CHECK: User=${req.user?.username}, role=${req.user?.role}, isMaster=${isMaster}, isAdmin=${isAdmin} ---`);
+
+  if (isMaster || isAdmin) {
     next();
   } else {
+    console.warn(`--- ADMIN ACCESS DENIED for ${req.user?.username} ---`);
     res.status(403).json({ success: false, message: 'Not authorized as an admin' });
   }
 };

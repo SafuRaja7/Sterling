@@ -23,6 +23,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
   'https://sterlingshopifymarket.online',
   'https://www.sterlingshopifymarket.online'
 ].filter(Boolean) as string[];
@@ -59,7 +61,7 @@ app.use(helmet({
 }));
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (!origin || allowedOrigins.includes(origin) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1') || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -71,6 +73,12 @@ app.use(morgan('dev'));
 
 // Static folder for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);

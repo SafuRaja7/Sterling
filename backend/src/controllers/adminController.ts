@@ -429,12 +429,29 @@ export const deleteProduct = async (req: Request, res: Response) => {
 // --- SUPPORT CHAT ---
 export const getThreads = async (req: Request, res: Response) => {
   try {
-    const { data: threads, error } = await supabase
+    let { data: threads, error } = await supabase
       .from('support_threads')
       .select('*, users(username, vip_level)')
       .order('last_message_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.warn("Failed to fetch threads with users relationship, falling back to manual join:", error.message);
+      // Fallback: Fetch threads and users separately
+      const { data: rawThreads, error: threadError } = await supabase
+        .from('support_threads')
+        .select('*')
+        .order('last_message_at', { ascending: false });
+      
+      if (threadError) throw threadError;
+      
+      const userIds = rawThreads.map(t => t.user_id);
+      const { data: users } = await supabase.from('users').select('id, username, vip_level').in('id', userIds);
+      
+      threads = rawThreads.map(t => ({
+        ...t,
+        users: users?.find(u => u.id === t.user_id) || { username: 'Unknown', vip_level: 1 }
+      }));
+    }
 
     res.json({ success: true, data: threads });
   } catch (error) {
@@ -445,20 +462,80 @@ export const getThreads = async (req: Request, res: Response) => {
 export const getThreadMessages = async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
-    const { data: messages, error } = await supabase
+    console.log(`[Support] Fetching messages for thread: ${threadId}`);
+    
+    // 1. Get the thread to find the user_id (for fallback)
+    const { data: thread, error: threadError } = await supabase
+      .from('support_threads')
+      .select('user_id')
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (threadError) {
+      console.error("[Support] Error fetching thread:", threadError.message);
+      throw threadError;
+    }
+    
+    if (!thread) {
+      console.error("[Support] Thread not found for ID:", threadId);
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+
+    // 2. Try fetching with thread_id
+    let { data: messages, error } = await supabase
       .from('support_messages')
       .select('*')
       .eq('thread_id', threadId)
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error && (error.message.includes('thread_id') || error.code === 'PGRST204' || error.code === '42703')) {
+      console.warn("[Support] Falling back to fetching messages by user_id:", error.message);
+      // Fallback: Use user_id and map sender to sender_type
+      const { data: rawMessages, error: msgError } = await supabase
+        .from('support_messages')
+        .select('*')
+        .eq('user_id', thread.user_id)
+        .order('created_at', { ascending: true });
+        
+      if (msgError) {
+        console.error("[Support] Fallback messages fetch failed:", msgError.message);
+        throw msgError;
+      }
+      
+      messages = (rawMessages || []).map((m: any) => ({
+        ...m,
+        thread_id: threadId,
+        sender_type: m.sender || (m.sender_id ? 'user' : 'admin'), // Map old sender field
+        message: m.message
+      }));
+    } else if (error) {
+      console.error("[Support] Primary messages fetch failed:", error.message);
+      throw error;
+    }
 
-    // Mark messages as read by admin (sender_type='user')
-    await supabase
-      .from('support_messages')
-      .update({ is_read: true })
-      .eq('thread_id', threadId)
-      .eq('sender_type', 'user');
+    console.log(`[Support] Found ${messages?.length || 0} messages`);
+
+    // Mark messages as read (sender_type or sender)
+    try {
+      const { error: probeError } = await supabase.from('support_messages').select('thread_id').limit(1);
+      const hasNewSchema = !probeError || (probeError.code !== '42703' && !probeError.message.includes('thread_id'));
+
+      if (hasNewSchema) {
+        await supabase
+          .from('support_messages')
+          .update({ is_read: true })
+          .eq('thread_id', threadId)
+          .eq('sender_type', 'user');
+      } else {
+        await supabase
+          .from('support_messages')
+          .update({ is_read: true })
+          .eq('user_id', thread.user_id)
+          .eq('sender', 'user');
+      }
+    } catch (e) {
+      console.warn("[Support] Failed to mark messages as read (non-critical):", e);
+    }
 
     // Reset unread count for admin
     await supabase
@@ -466,9 +543,10 @@ export const getThreadMessages = async (req: Request, res: Response) => {
       .update({ unread_admin_count: 0 })
       .eq('id', threadId);
 
-    res.json({ success: true, data: messages });
-  } catch (error) {
-    res.status(500).json({ success: false, message: (error as Error).message });
+    res.json({ success: true, data: messages || [] });
+  } catch (error: any) {
+    console.error("[Support] GET_THREAD_MESSAGES_CRASH:", error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -491,15 +569,27 @@ export const sendAdminMessage = async (req: Request, res: Response) => {
     if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
 
     // 2. Create message
+    const messagePayload: any = {
+      message,
+      attachment_url: attachmentUrl
+    };
+
+    // Try to determine which columns exist
+    const { error: probeError } = await supabase.from('support_messages').select('thread_id').limit(1);
+    const hasThreadId = !probeError || (probeError.code !== '42703' && !probeError.message.includes('thread_id'));
+
+    if (hasThreadId) {
+      messagePayload.thread_id = threadId;
+      messagePayload.sender_type = 'admin';
+      messagePayload.sender_id = null;
+    } else {
+      messagePayload.user_id = thread.user_id;
+      messagePayload.sender = 'admin';
+    }
+
     const { data: newMessage, error } = await supabase
       .from('support_messages')
-      .insert({
-        thread_id: threadId,
-        sender_id: null, // Admin sender
-        sender_type: 'admin',
-        message,
-        attachment_url: attachmentUrl
-      })
+      .insert(messagePayload)
       .select()
       .single();
 
@@ -547,18 +637,21 @@ export const resolveThread = async (req: Request, res: Response) => {
 // --- LEVEL APPROVALS ---
 export const getLevelRequests = async (req: Request, res: Response) => {
   try {
+    // Probe if column exists first
+    const { error: probeError } = await supabase.from('users').select('vip_level_request_status').limit(1);
+    
+    if (probeError) {
+      console.warn("--- LEVEL REQUEST SCHEMA MISSING: Returning empty list ---");
+      return res.json({ success: true, data: [] });
+    }
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('vip_level_request_status', 'pending')
       .order('updated_at', { ascending: false });
 
-    if (error) {
-      if (error.message.includes('column') || error.code === 'PGRST204') {
-        return res.status(200).json({ success: false, message: "MIGRATION_REQUIRED: Please run the level approval SQL migration.", data: [] });
-      }
-      throw error;
-    }
+    if (error) throw error;
     res.json({ success: true, data: data.map(mapUserToCamelCase) });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });

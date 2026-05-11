@@ -33,7 +33,9 @@ export default function Login() {
         router.push("/dashboard");
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Access Denied");
+      const errorMsg = error.response?.data?.message || error.message || "Access Denied";
+      console.error("Login Error:", error);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

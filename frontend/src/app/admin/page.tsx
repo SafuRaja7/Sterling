@@ -115,6 +115,11 @@ export default function AdminDashboard() {
   const fetchAll = async () => {
     setLoading(true);
     try {
+      // Determine role from store if available, otherwise we'll try to find out
+      const currentRole = useAuthStore.getState().user?.role;
+      const isActuallyVA = currentRole === 'va';
+      const isActuallyAdmin = currentRole === 'admin' || useAuthStore.getState().user?.username?.toLowerCase().includes('admin');
+
       const endpoints = [
         api.get("/admin/users"),
         api.get("/admin/transactions"),
@@ -124,13 +129,17 @@ export default function AdminDashboard() {
         api.get("/admin/chats"),
       ];
 
-      if (isVA) {
+      // Always try to sync profile to ensure session integrity
+      if (isActuallyVA) {
         endpoints.push(api.get("/va-auth/me"));
+      } else {
+        endpoints.push(api.get("/user/profile"));
       }
 
       const results = await Promise.allSettled(endpoints);
 
-      const [usersRes, txRes, productsRes, levelRes, vasRes, chatsRes, meRes] = results;
+      // Map results
+      const [usersRes, txRes, productsRes, levelRes, vasRes, chatsRes, profileRes] = results;
 
       setData({
         users: usersRes.status === 'fulfilled' ? usersRes.value.data.data : [],
@@ -141,12 +150,27 @@ export default function AdminDashboard() {
         chats: chatsRes.status === 'fulfilled' ? chatsRes.value.data.data : [],
       });
 
-      if (isVA && meRes && meRes.status === 'fulfilled') {
-        setUser(meRes.value.data.data);
+      if (profileRes && profileRes.status === 'fulfilled') {
+        const userData = profileRes.value.data.data;
+        setUser(userData);
       }
     } catch (err: any) {
       console.error("Fetch All Error:", err);
     } finally { setLoading(false); }
+  };
+
+  const handleLevelRequest = async (userId: string, level: number, action: 'approved' | 'rejected') => {
+    if (!canApproveRequests) { toast.error("Unauthorized: Request Permission Required"); return; }
+    setProcessingId(userId);
+    try {
+      const res = await api.put(`/admin/level-requests/${userId}`, { level, action });
+      if (res.data.success) {
+        toast.success(`Level ${level} ${action}`);
+        fetchAll();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Operation failed");
+    } finally { setProcessingId(null); }
   };
 
   const handleTransaction = async (id: string, action: "approve" | "reject") => {
@@ -471,6 +495,9 @@ export default function AdminDashboard() {
                         <div>
                           <p className="text-sm font-black text-white">{u.username}</p>
                           <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">User Profile Details</p>
+                          {u.activeCombos && (
+                            <p className="text-[8px] font-black text-[#38A169] uppercase mt-1">Combos: {u.activeCombos}</p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -661,10 +688,16 @@ export default function AdminDashboard() {
                       <div className="h-12 w-12 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]"><Crown size={24} /></div>
                       <div><p className="text-sm font-black text-white">{req.username}</p><p className="text-[9px] font-bold text-white/20 uppercase">Requesting VIP {req.vipLevelRequest}</p></div>
                     </div>
-                    <button onClick={() => updateVIP(req._id, req.vipLevelRequest)} disabled={!canApproveRequests}
-                      className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all ${canApproveRequests ? 'bg-gold-gradient text-black' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}>
-                      Approve
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleLevelRequest(req._id, req.vipLevelRequest, 'approved')} disabled={!canApproveRequests || processingId === req._id}
+                        className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all ${canApproveRequests ? 'bg-[#38A169] text-white hover:bg-[#2F855A]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}>
+                        Approve
+                      </button>
+                      <button onClick={() => handleLevelRequest(req._id, req.vipLevelRequest, 'rejected')} disabled={!canApproveRequests || processingId === req._id}
+                        className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all ${canApproveRequests ? 'bg-[#E53E3E]/10 text-[#E53E3E] border border-[#E53E3E]/20 hover:bg-[#E53E3E]/20' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}>
+                        Reject
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {data.levelRequests.length === 0 && <div className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest">No pending requests</div>}

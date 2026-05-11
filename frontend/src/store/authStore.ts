@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface User {
   _id: string;
@@ -15,6 +16,7 @@ interface User {
   dailyProfit?: number;
   dailyTasks?: number;
   withdrawalAddress?: string;
+  permissions?: any;
 }
 
 interface AuthState {
@@ -27,28 +29,30 @@ interface AuthState {
   setUser: (user: User) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-  isAuthenticated: false,
-  
-  login: (user, token) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
-    set({ user, token, isAuthenticated: true });
-  },
-  
-  logout: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-    }
-    set({ user: null, token: null, isAuthenticated: false });
-  },
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      
+      login: (user, token) => {
+        set({ user, token, isAuthenticated: true });
+      },
+      
+      logout: () => {
+        set({ user: null, token: null, isAuthenticated: false });
+      },
 
-  updateUser: (data) => set((state) => ({
-    user: state.user ? { ...state.user, ...data } : null
-  })),
+      updateUser: (data) => set((state) => ({
+        user: state.user ? { ...state.user, ...data } : null
+      })),
 
-  setUser: (user) => set({ user, isAuthenticated: true })
-}));
+      setUser: (user) => set({ user, isAuthenticated: true })
+    }),
+    {
+      name: 'sterling-auth-storage',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);

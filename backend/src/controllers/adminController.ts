@@ -16,13 +16,13 @@ const mapUserToCamelCase = (user: any) => {
     totalCommission: Number(user.total_commission),
     inviteCode: user.invite_code,
     pendingTask: user.pending_task,
-    isTaskLocked: user.is_task_locked,
-    currentSessionCommission: Number(user.current_session_commission),
+    isTaskLocked: user.is_task_locked || false,
+    currentSessionCommission: Number(user.current_session_commission || 0),
     createdAt: user.created_at,
     activeCombos,
-    approvedVipLevel: user.approved_vip_level,
-    vipLevelRequest: user.vip_level_request,
-    vipLevelRequestStatus: user.vip_level_request_status,
+    approvedVipLevel: user.approvedVipLevel || 0, // Use virtual field if present
+    vipLevelRequest: user.vipLevelRequest || 0,
+    vipLevelRequestStatus: user.vipLevelRequestStatus || 'none',
     vipLevelApprovedAt: user.vip_level_approved_at,
     withdrawalAddress: user.withdrawal_address
   };
@@ -77,8 +77,17 @@ export const editUser = async (req: Request, res: Response) => {
     const updates: any = {};
     if (balance !== undefined) updates.balance = balance;
     if (vipLevel !== undefined) updates.vip_level = vipLevel;
-    if (isTaskLocked !== undefined) updates.is_task_locked = isTaskLocked;
     if (withdrawalAddress !== undefined) updates.withdrawal_address = withdrawalAddress;
+
+    // Resiliency: check for is_task_locked column
+    if (isTaskLocked !== undefined) {
+      const { error: lockProbeError } = await supabase.from('users').select('is_task_locked').limit(1);
+      if (!lockProbeError) {
+        updates.is_task_locked = isTaskLocked;
+      } else {
+        console.warn("--- USER SCHEMA MISSING: skipping 'is_task_locked' column ---");
+      }
+    }
 
 
     const { data: user, error } = await supabase
@@ -288,6 +297,7 @@ export const getAllTransactions = async (req: Request, res: Response) => {
                     vip_level
                 )
             `)
+            .or('admin_remarks.is.null,admin_remarks.neq.VIP_UNLOCK_REQUEST')
             .order('created_at', { ascending: false });
             
         if (error) throw error;
@@ -637,22 +647,33 @@ export const resolveThread = async (req: Request, res: Response) => {
 // --- LEVEL APPROVALS ---
 export const getLevelRequests = async (req: Request, res: Response) => {
   try {
-    // Probe if column exists first
-    const { error: probeError } = await supabase.from('users').select('vip_level_request_status').limit(1);
-    
-    if (probeError) {
-      console.warn("--- LEVEL REQUEST SCHEMA MISSING: Returning empty list ---");
-      return res.json({ success: true, data: [] });
-    }
-
     const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('vip_level_request_status', 'pending')
-      .order('updated_at', { ascending: false });
+      .from('transactions')
+      .select(`
+        *,
+        users (
+          id,
+          username,
+          vip_level
+        )
+      `)
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json({ success: true, data: data.map(mapUserToCamelCase) });
+
+    // Map to frontend expected format
+    const requests = (data || []).map((tx: any) => ({
+      _id: tx.users.id,
+      username: tx.users.username,
+      vipLevel: tx.users.vip_level,
+      vipLevelRequest: tx.amount, // Level stored in amount
+      transactionId: tx.id // Keep for approval
+    }));
+
+    res.json({ success: true, data: requests });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });
   }
@@ -664,21 +685,35 @@ export const approveLevelUnlock = async (req: Request, res: Response) => {
     const { userId } = req.params;
     const { level, action } = req.body; // action: 'approved' or 'rejected'
 
+    // 1. Update the transaction status
+    const { error: txError } = await supabase
+      .from('transactions')
+      .update({ status: action })
+      .eq('user_id', userId)
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+      .eq('status', 'pending');
+
+    if (txError) throw txError;
+
+    // 2. If approved, update user's main vip_level and RESET tasks
     if (action === 'approved') {
-      const { error } = await supabase.from('users').update({
-        approved_vip_level: level,
-        vip_level_request_status: 'approved',
-        vip_level_approved_at: new Date()
-      }).eq('id', userId);
-      if (error) throw error;
-    } else {
-      await supabase.from('users').update({
-        vip_level_request_status: 'rejected'
-      }).eq('id', userId);
+      const { error: userError } = await supabase
+        .from('users')
+        .update({
+          vip_level: level,
+          completed_tasks_today: 0, // Reset counter for the new level
+          last_task_reset: new Date().toISOString(),
+          updated_at: new Date()
+        })
+        .eq('id', userId);
+        
+      if (userError) throw userError;
     }
 
     res.json({ success: true, message: `Level ${level} ${action}` });
   } catch (error) {
+    console.error("APPROVE LEVEL ERROR:", error);
     res.status(500).json({ success: false, message: (error as Error).message });
   }
 };

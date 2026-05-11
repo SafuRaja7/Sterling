@@ -223,22 +223,16 @@ export default function Tasks() {
                   </div>
                   <div className="flex flex-col gap-4 mb-6">
                     <div className="flex gap-3 overflow-x-auto luxury-scrollbar pb-2">
-                      {currentTask.products && currentTask.products.length > 0 ? (
-                        currentTask.products.map((p: any, idx: number) => (
-                          <div key={idx} className="h-20 w-20 rounded-2xl flex-shrink-0 overflow-hidden p-2 bg-[#252525] border border-[#D4AF37]/20 relative">
-                            <img src={p.image_url} alt="" className="w-full h-full object-contain" />
-                            {currentTask.comboId && (
-                              <div className="absolute top-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-[8px] font-black text-[#D4AF37] border border-[#D4AF37]/30">
-                                {idx + 1}/{currentTask.products.length}
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="h-20 w-20 rounded-2xl flex-shrink-0 overflow-hidden p-2 bg-[#252525] border border-[#D4AF37]/20">
-                          <img src={currentTask.productImage} alt="" className="w-full h-full object-contain" />
+                      {currentTask.productImage?.split('|').map((img: string, idx: number) => (
+                        <div key={idx} className="h-20 w-20 rounded-2xl flex-shrink-0 overflow-hidden p-2 bg-[#252525] border border-[#D4AF37]/20 relative">
+                          <img src={img} alt="" className="w-full h-full object-contain" />
+                          {currentTask.productImage.includes('|') && (
+                            <div className="absolute top-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-[8px] font-black text-[#D4AF37] border border-[#D4AF37]/30">
+                              {idx + 1}/{currentTask.productImage.split('|').length}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
                     <div className="flex-1">
                       <h3 className="text-sm font-black text-[#F5F5F5] leading-snug mb-3">{currentTask.productName}</h3>

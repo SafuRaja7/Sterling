@@ -52,10 +52,31 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       await supabase.from('users').update({ invite_code: inviteCode }).eq('id', userId);
     }
 
+    // --- DAILY AUTO-RESET LOGIC ---
+    const lastReset = user.last_task_reset ? new Date(user.last_task_reset) : new Date(0);
+    const now = new Date();
+    
+    // Check if the last reset was on a different calendar day
+    const isDifferentDay = 
+      lastReset.getUTCDate() !== now.getUTCDate() || 
+      lastReset.getUTCMonth() !== now.getUTCMonth() || 
+      lastReset.getUTCFullYear() !== now.getUTCFullYear();
+
+    if (isDifferentDay) {
+      console.log(`--- AUTO-RESETTING TASKS FOR USER ${user.username} ---`);
+      await supabase.from('users').update({ 
+        completed_tasks_today: 0,
+        last_task_reset: now.toISOString()
+      }).eq('id', userId);
+      
+      // Update local user object for the rest of the function
+      user.completed_tasks_today = 0;
+    }
+
     // --- CALCULATE EARNINGS ---
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const yesterday = new Date(todayStart);
     yesterday.setDate(yesterday.getDate() - 1);
 
     const { data: todayTasks } = await supabase
@@ -63,7 +84,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       .select('commission')
       .eq('user_id', userId)
       .eq('status', 'completed')
-      .gte('created_at', today.toISOString());
+      .gte('created_at', todayStart.toISOString());
 
     const { data: yesterdayTasks } = await supabase
       .from('tasks')
@@ -71,11 +92,25 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       .eq('user_id', userId)
       .eq('status', 'completed')
       .gte('created_at', yesterday.toISOString())
-      .lt('created_at', today.toISOString());
+      .lt('created_at', todayStart.toISOString());
 
     const todayEarning = todayTasks?.reduce((sum, t) => sum + Number(t.commission), 0) || 0;
     const yesterdayEarning = yesterdayTasks?.reduce((sum, t) => sum + Number(t.commission), 0) || 0;
 
+
+    // Fetch virtual VIP approval status
+    const { data: approvalTxs } = await supabase
+      .from('transactions')
+      .select('amount, status')
+      .eq('user_id', userId)
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+      .order('created_at', { ascending: false });
+
+    const latestTx = (approvalTxs || []).find(t => t.status === 'pending');
+    const maxApprovedLevel = (approvalTxs || [])
+      .filter(t => t.status === 'approved')
+      .reduce((max, t) => Math.max(max, Number(t.amount)), 0);
 
     res.json({ success: true, data: { 
       _id: user.id,
@@ -83,18 +118,18 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       role: user.role,
       balance: user.balance,
       vipLevel: user.vip_level,
-      approvedVipLevel: user.approved_vip_level || 0,
-      vipLevelRequest: user.vip_level_request || 0,
-      vipLevelRequestStatus: user.vip_level_request_status || 'none',
-      vipLevelApprovedAt: user.vip_level_approved_at,
+      approvedVipLevel: maxApprovedLevel, 
+      vipLevelRequest: latestTx?.amount || 0,
+      vipLevelRequestStatus: latestTx?.status || 'none',
+      vipLevelApprovedAt: user.updated_at,
       completedTasksToday: user.completed_tasks_today,
       totalDeposited: user.total_deposited,
       totalWithdrawn: user.total_withdrawn,
       totalCommission: user.total_commission,
       todayEarning,
       yesterdayEarning,
-      currentSessionCommission: user.current_session_commission,
-      isTaskLocked: user.is_task_locked,
+      currentSessionCommission: user.current_session_commission || 0,
+      isTaskLocked: user.is_task_locked || false,
       inviteCode: inviteCode,
       avatar: user.avatar,
       withdrawalAddress: user.withdrawal_address,
@@ -141,9 +176,18 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
     if (!settings) return res.status(500).json({ success: false, message: 'Task settings not configured' });
 
     // --- MANUAL LEVEL APPROVAL CHECK ---
-    const approvedLevel = user.approved_vip_level || 0;
-    
-    if (user.vip_level > approvedLevel) {
+    // --- VIRTUAL APPROVAL CHECK ---
+    const { data: approvedTxs } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+      .eq('status', 'approved');
+
+    const maxApproved = (approvedTxs || []).reduce((max, t) => Math.max(max, Number(t.amount)), 0);
+
+    if (user.vip_level > maxApproved) {
       return res.status(403).json({
         success: false,
         message: `VIP Level ${user.vip_level} is not yet approved for tasks. Please request an unlock.`,
@@ -190,13 +234,13 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, message: 'Session completed. Please wait for next cycle or recharge to upgrade.' });
     }
 
-    const nextTaskNumber = user.completed_tasks_today + 1;
+    const nextTaskNumber = (user.completed_tasks_today || 0) + 1;
 
     // 2. Fetch Product Pool with Anti-Repetition
     let recentIds = user.recently_shown_products || [];
     let query = supabase.from('products').select('*').eq('vip_level', user.vip_level || 1);
     
-    if (recentIds.length > 0) {
+    if (recentIds.length > 0 && Array.isArray(recentIds)) {
       query = query.not('id', 'in', `(${recentIds.join(',')})`);
     }
 
@@ -211,7 +255,11 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       }
 
       // Products exist, so it must be exhausted due to recentIds. Reset and re-fetch.
-      await supabase.from('users').update({ recently_shown_products: [] }).eq('id', userId);
+      const { error: recentProbe } = await supabase.from('users').select('recently_shown_products').limit(1);
+      if (!recentProbe) {
+        await supabase.from('users').update({ recently_shown_products: [] }).eq('id', userId);
+      }
+      
       const { data: resetPool } = await supabase.from('products').select('*').eq('vip_level', user.vip_level || 1);
       productPool = resetPool;
       recentIds = [];
@@ -325,8 +373,15 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
 
     // Snapshot product data into the task
     taskData.product_name = selectedProducts.map(p => p.name).join(' + ');
-    taskData.product_image = selectedProducts[0].image_url; // Use first image as thumbnail
-    taskData.products = selectedProducts; // JSONB storage
+    taskData.product_image = selectedProducts.map(p => p.image_url).join('|'); // Join multiple images with |
+    
+    // Resiliency: Check if 'products' column exists before storing JSON
+    const { error: productsProbeError } = await supabase.from('tasks').select('products').limit(1);
+    if (!productsProbeError) {
+      taskData.products = selectedProducts; // JSONB storage
+    } else {
+      console.warn("--- TASK SCHEMA MISSING: skipping 'products' JSONB column ---");
+    }
 
     // 4. Insert Task
     const { data: task, error: taskError } = await supabase
@@ -338,13 +393,17 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
     if (taskError) throw taskError;
 
     // 5. Update User State
-    const newRecentIds = [...recentIds, ...selectedProducts.map(p => p.id)].slice(-20);
+    const updatePayload: any = { pending_task: task.id };
+    
+    // Resiliency: check for recently_shown_products column
+    const { error: recentProbe } = await supabase.from('users').select('recently_shown_products').limit(1);
+    if (!recentProbe) {
+      updatePayload.recently_shown_products = [...recentIds, ...selectedProducts.map(p => p.id)].slice(-20);
+    }
+
     await supabase
       .from('users')
-      .update({ 
-        pending_task: task.id,
-        recently_shown_products: newRecentIds
-      })
+      .update(updatePayload)
       .eq('id', userId);
 
     res.json({ success: true, data: mapTaskToCamelCase(task) });
@@ -407,16 +466,23 @@ export const completeTask = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    const updateData: any = { 
+      balance: newBalance,
+      total_commission: newTotalCommission,
+      completed_tasks_today: newCompletedTasks,
+      vip_level: newVipLevel,
+      pending_task: null
+    };
+
+    // Resiliency: check for current_session_commission column
+    const { error: commProbeError } = await supabase.from('users').select('current_session_commission').limit(1);
+    if (!commProbeError) {
+      updateData.current_session_commission = newSessionCommission;
+    }
+
     const { data: updatedUser } = await supabase
       .from('users')
-      .update({ 
-        balance: newBalance,
-        total_commission: newTotalCommission,
-        current_session_commission: newSessionCommission,
-        completed_tasks_today: newCompletedTasks,
-        vip_level: newVipLevel,
-        pending_task: null
-      })
+      .update(updateData)
       .eq('id', userId)
       .select()
       .single();
@@ -701,46 +767,48 @@ export const requestLevelUnlock = async (req: AuthRequest, res: Response) => {
     const { data: user, error: userError } = await supabase.from('users').select('*').eq('id', userId).single();
     if (userError || !user) throw new Error('User not found');
 
-    // 2. Probe for VIP columns
-    const { data: columnProbe, error: probeError } = await supabase
-      .from('users')
-      .select('approved_vip_level, vip_level_request, vip_level_request_status')
-      .eq('id', userId)
-      .maybeSingle();
+    // 1. Fetch virtual VIP approval status
+    const { data: approvedTxs } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('type', 'vip_unlock')
+      .eq('status', 'approved');
 
-    const hasVipColumns = !probeError;
+    const maxApproved = (approvedTxs || []).reduce((max, t) => Math.max(max, Number(t.amount)), 0);
 
-    if (hasVipColumns) {
-      if (user.approved_vip_level >= level) {
-        return res.status(400).json({ success: false, message: 'Level already approved' });
-      }
-
-      // Update request in DB
-      const { error } = await supabase.from('users').update({
-        vip_level_request: level,
-        vip_level_request_status: 'pending'
-      }).eq('id', userId);
-
-      if (error) throw error;
-    } else {
-      console.warn('--- VIP REQUEST SCHEMA MISSING: Falling back to auto-approval ---');
-      // FALLBACK: If schema is missing, just update the main vip_level directly for now
-      // This ensures the user isn't blocked by the missing database columns.
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ vip_level: level })
-        .eq('id', userId);
-        
-      if (updateError) throw updateError;
-      
-      return res.json({ 
-        success: true, 
-        message: `VIP ${level} unlocked successfully (Auto-approved due to system upgrade).`,
-        autoApproved: true
-      });
+    // Check if already approved for this level
+    if (maxApproved >= level) {
+      return res.status(400).json({ success: false, message: 'Level already approved' });
     }
 
-    // 3. Notify admin
+    // 2. Check for existing pending request in transactions table
+    const { data: existingRequest } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (existingRequest) {
+      return res.status(400).json({ success: false, message: 'You already have a pending unlock request' });
+    }
+
+    // 3. Create a "Virtual Request" in transactions table
+    const { error: txnError } = await supabase.from('transactions').insert({
+      user_id: userId,
+      type: 'deposit',
+      amount: level,
+      net_amount: 0, // Set to 0 so it doesn't affect balance
+      admin_remarks: 'VIP_UNLOCK_REQUEST',
+      status: 'pending'
+    });
+
+    if (txnError) throw txnError;
+
+    // 4. Notify admin
     const io = req.app.get('io');
     if (io) {
       io.to('admin_notifications').emit('new_level_request', {
@@ -749,7 +817,7 @@ export const requestLevelUnlock = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.json({ success: true, message: `Request for VIP ${level} submitted successfully.` });
+    res.json({ success: true, message: `Request for VIP ${level} submitted successfully. Please wait for Admin approval.` });
   } catch (error) {
     console.error("VIP REQUEST ERROR:", error);
     res.status(500).json({ success: false, message: (error as Error).message });

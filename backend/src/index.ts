@@ -16,7 +16,6 @@ import vaAuthRoutes from './routes/vaAuthRoutes';
 
 dotenv.config();
 
-// Connect to database
 connectDB();
 
 const allowedOrigins = [

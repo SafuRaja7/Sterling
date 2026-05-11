@@ -79,16 +79,18 @@ export const editUser = async (req: Request, res: Response) => {
     if (vipLevel !== undefined) updates.vip_level = vipLevel;
     if (withdrawalAddress !== undefined) updates.withdrawal_address = withdrawalAddress;
 
-    // Resiliency: check for is_task_locked column
+    if (vipLevel !== undefined) {
+      updates.vip_level = vipLevel;
+      updates.completed_tasks_today = 0;
+      updates.last_task_reset = new Date().toISOString();
+    }
+
     if (isTaskLocked !== undefined) {
       const { error: lockProbeError } = await supabase.from('users').select('is_task_locked').limit(1);
       if (!lockProbeError) {
         updates.is_task_locked = isTaskLocked;
-      } else {
-        console.warn("--- USER SCHEMA MISSING: skipping 'is_task_locked' column ---");
       }
     }
-
 
     const { data: user, error } = await supabase
       .from('users')
@@ -240,7 +242,6 @@ export const approveTransaction = async (req: Request, res: Response) => {
             total_deposited: Number(user.total_deposited) + Number(transaction.net_amount),
             vip_level: newVipLevel,
             completed_tasks_today: newCompletedTasks
-            // NOTE: approved_vip_level is NOT updated here, enforcing manual approval
           }).eq('id', user.id);
         } else if (transaction.type === 'withdrawal') {
           await supabase.from('users').update({

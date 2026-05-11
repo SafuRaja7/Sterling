@@ -101,14 +101,22 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
     // Fetch virtual VIP approval status
     const { data: approvalTxs } = await supabase
       .from('transactions')
-      .select('amount, status')
+      .select('amount, status, created_at, updated_at')
       .eq('user_id', userId)
       .eq('type', 'deposit')
       .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
       .order('created_at', { ascending: false });
 
-    const latestTx = (approvalTxs || []).find(t => t.status === 'pending');
-    const maxApprovedLevel = (approvalTxs || [])
+    // use existing lastReset from line 56
+    const validApprovalTxs = (approvalTxs || []).filter(tx => {
+      const txTime = new Date(tx.updated_at || tx.created_at).getTime();
+      const resetTime = lastReset.getTime();
+      // Grace window: If approved, allow if updated up to 1 hour before the reset
+      return tx.status === 'approved' ? (txTime > resetTime - 3600000) : (new Date(tx.created_at).getTime() > resetTime);
+    });
+    
+    const latestTx = (approvalTxs || []).find(t => t.status === 'pending' && new Date(t.created_at) > lastReset);
+    const maxApprovedLevel = validApprovalTxs
       .filter(t => t.status === 'approved')
       .reduce((max, t) => Math.max(max, Number(t.amount)), 0);
 
@@ -175,45 +183,40 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
 
     if (!settings) return res.status(500).json({ success: false, message: 'Task settings not configured' });
 
-    // --- MANUAL LEVEL APPROVAL CHECK ---
     // --- VIRTUAL APPROVAL CHECK ---
     const { data: approvedTxs } = await supabase
       .from('transactions')
-      .select('amount')
+      .select('amount, created_at, updated_at')
       .eq('user_id', userId)
       .eq('type', 'deposit')
       .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
       .eq('status', 'approved');
 
-    const maxApproved = (approvedTxs || []).reduce((max, t) => Math.max(max, Number(t.amount)), 0);
+    const lastReset = user.last_task_reset ? new Date(user.last_task_reset) : new Date(0);
+    const validTxs = (approvedTxs || []).filter(tx => {
+      const txTime = new Date(tx.updated_at || tx.created_at).getTime();
+      const resetTime = lastReset.getTime();
+      // Grace window for approvals
+      return txTime > resetTime - 3600000;
+    });
+    const maxApproved = validTxs.reduce((max, t) => Math.max(max, Number(t.amount)), 0);
 
-    if (user.vip_level > maxApproved) {
+    if (user.vip_level === 0 || user.vip_level > maxApproved) {
       return res.status(403).json({
         success: false,
-        message: `VIP Level ${user.vip_level} is not yet approved for tasks. Please request an unlock.`,
+        message: `VIP Level ${user.vip_level || 1} is not yet approved for today's tasks. Please request an unlock.`,
         code: 'LEVEL_NOT_APPROVED'
       });
     }
 
-    // --- 24H EXPIRY CHECK FOR VIP 2 & 3 ---
-    if (user.vip_level >= 2 && user.vip_level_approved_at) {
-      const approvedAt = new Date(user.vip_level_approved_at).getTime();
-      const now = new Date().getTime();
-      const diffHours = (now - approvedAt) / (1000 * 60 * 60);
-
-      if (diffHours >= 24) {
-        // Reset approval if 24h passed
-        await supabase.from('users').update({ 
-          approved_vip_level: 1, // Reset to Level 1 or 0
-          vip_level_request_status: 'none'
-        }).eq('id', userId);
-
-        return res.status(403).json({
-          success: false,
-          message: `Your 24-hour approval for VIP Level ${user.vip_level} has expired. Please request a new unlock.`,
-          code: 'APPROVAL_EXPIRED'
-        });
-      }
+    // --- 24H EXPIRY CHECK (Redundant but safe due to auth middleware) ---
+    const diffHours = (new Date().getTime() - lastReset.getTime()) / (1000 * 60 * 60);
+    if (diffHours >= 24) {
+      return res.status(403).json({
+        success: false,
+        message: `Your daily tasks have expired. Please refresh the page to reset.`,
+        code: 'APPROVAL_EXPIRED'
+      });
     }
 
 
@@ -772,7 +775,8 @@ export const requestLevelUnlock = async (req: AuthRequest, res: Response) => {
       .from('transactions')
       .select('amount')
       .eq('user_id', userId)
-      .eq('type', 'vip_unlock')
+      .eq('type', 'deposit')
+      .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
       .eq('status', 'approved');
 
     const maxApproved = (approvedTxs || []).reduce((max, t) => Math.max(max, Number(t.amount)), 0);

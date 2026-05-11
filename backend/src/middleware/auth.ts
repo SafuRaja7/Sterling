@@ -77,6 +77,30 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       }
 
       req.user = { ...userProfile, _id: userProfile.id };
+      
+      // --- DAILY RESET LOGIC ---
+      const now = new Date();
+      const lastReset = userProfile.last_task_reset ? new Date(userProfile.last_task_reset) : new Date(0);
+      const diffHours = (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60);
+
+      if (diffHours >= 24) {
+        console.log(`--- PERFORMING DAILY RESET FOR ${userProfile.username} ---`);
+        const { error: resetError } = await supabase
+          .from('users')
+          .update({
+            completed_tasks_today: 0,
+            vip_level: 0, // Reset to 0 so they must unlock level 1 again
+            last_task_reset: now.toISOString(),
+            updated_at: now.toISOString()
+          })
+          .eq('id', user.id);
+
+        if (!resetError) {
+          req.user.completed_tasks_today = 0;
+          req.user.vip_level = 0;
+        }
+      }
+
       console.log(`--- AUTH SUCCESS: User ${userProfile.username} (${userProfile.role}) ---`);
       next();
     } catch (error: any) {

@@ -265,14 +265,45 @@ export default function Tasks() {
               )}
             </AnimatePresence>
 
-            {/* Start Button */}
-            {!currentTask && (
-              <button onClick={startMatching} disabled={matching}
-                className="btn-gold w-full py-5 rounded-[24px] flex items-center justify-center gap-3 text-sm disabled:opacity-40"
-                style={{ boxShadow: "0 8px 30px rgba(212,175,55,0.3)" }}>
-                {matching ? <><div className="w-5 h-5 rounded-full border-2 border-[#0D0D0D]/30 border-t-[#0D0D0D] animate-spin" /><span>Matching...</span></> : <><Zap size={20} /><span>Start New Task</span></>}
-              </button>
-            )}
+            {/* Start Button / Completion Message */}
+            {(() => {
+              const tierLevel = viewTier || 1;
+              const tasksDoneInThisLevel = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
+              const isLevelCompleted = tasksDoneInThisLevel >= 20;
+
+              if (isLevelCompleted && !currentTask && !matching) {
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="w-full py-8 luxury-glass rounded-[32px] border border-[#38A169]/30 bg-[#38A169]/5 text-center"
+                  >
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#38A169]/20 text-[#38A169] mb-4">
+                      <CheckCircle size={32} />
+                    </div>
+                    <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Level {tierLevel} Completed!</h3>
+                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] mb-6 px-4">You have finished all 20 tasks for this room.</p>
+                    <button 
+                      onClick={() => setView('rooms')}
+                      className="px-8 py-3 rounded-full bg-white/5 border border-white/10 text-white font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      Back to Rooms
+                    </button>
+                  </motion.div>
+                );
+              }
+
+              if (!currentTask) {
+                return (
+                  <button onClick={startMatching} disabled={matching}
+                    className="btn-gold w-full py-5 rounded-[24px] flex items-center justify-center gap-3 text-sm disabled:opacity-40"
+                    style={{ boxShadow: "0 8px 30px rgba(212,175,55,0.3)" }}>
+                    {matching ? <><div className="w-5 h-5 rounded-full border-2 border-[#0D0D0D]/30 border-t-[#0D0D0D] animate-spin" /><span>Matching...</span></> : <><Zap size={20} /><span>Start New Task</span></>}
+                  </button>
+                );
+              }
+              return null;
+            })()}
           </motion.div>
         ) : (
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
@@ -285,17 +316,22 @@ export default function Tasks() {
             {tiers.map((tier, i) => {
               const requiredBalance = tier.min_access_balance || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
               
-              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level;
+              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level && user.balance >= requiredBalance;
               const isPending = user.vipLevelRequest === tier.vip_level && user.vipLevelRequestStatus === 'pending';
               
               const tasksDoneInThisLevel = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
               const isLevelCompleted = tasksDoneInThisLevel >= 20;
+              
+              // Previous level must be fully completed (20/20) to ENTER or REQUEST next level
               const isPreviousLevelCompleted = tier.vip_level === 1 || user.completedTasksToday >= (tier.vip_level - 1) * 20;
               
-              const isEligible = !isUnlocked && !isPending && user.balance >= requiredBalance && isPreviousLevelCompleted;
+              // ELIGIBLE state only depends on balance as per requirements
+              const isEligible = !isUnlocked && !isPending && user.balance >= requiredBalance;
+              // LOCKED state is when balance is NOT met and not unlocked/pending
               const isLocked = !isUnlocked && !isPending && !isEligible;
               
-              const isCurrentRoom = isUnlocked && !isLevelCompleted && isPreviousLevelCompleted;
+              // OPEN/ENTER state
+              const canEnter = isUnlocked && isPreviousLevelCompleted && !isLevelCompleted;
 
               const tierColors: Record<number, string> = {
                 1: "#3b82f6", // Blue
@@ -315,20 +351,21 @@ export default function Tasks() {
                   className="relative overflow-hidden luxury-glass rounded-[28px] p-6 group transition-all"
                   style={{ 
                     opacity: isLocked ? 0.4 : 1,
-                    borderLeft: isCurrentRoom ? `6px solid ${accentColor}` : isLevelCompleted ? `2px solid #38A169` : isUnlocked ? `2px solid ${accentColor}` : "1px solid rgba(245,245,245,0.05)",
-                    background: isCurrentRoom ? "rgba(255,255,255,0.02)" : undefined,
-                    filter: isLocked ? 'grayscale(100%)' : 'none'
+                    borderLeft: canEnter ? `6px solid ${accentColor}` : isLevelCompleted ? `2px solid #38A169` : isUnlocked ? `2px solid ${accentColor}` : isEligible ? `1px solid ${accentColor}` : "1px solid rgba(245,245,245,0.05)",
+                    background: canEnter ? "rgba(255,255,255,0.02)" : isEligible ? `${accentColor}05` : undefined,
+                    filter: isLocked ? 'grayscale(100%)' : 'none',
+                    boxShadow: isEligible ? `0 0 20px ${accentColor}15` : 'none'
                   }}
                 >
                   {/* Ribbon Badge */}
                   <div className="absolute top-0 left-0 px-4 py-1.5 rounded-br-2xl text-[9px] font-black uppercase tracking-widest text-white shadow-xl z-20"
-                    style={{ background: isLevelCompleted ? "#38A169" : isCurrentRoom ? accentColor : isUnlocked ? `${accentColor}80` : "#252525" }}>
-                    {isLevelCompleted ? 'Completed' : isCurrentRoom ? 'Current' : isLocked ? 'Locked' : `VIP ${tier.vip_level}`}
+                    style={{ background: isLevelCompleted ? "#38A169" : canEnter ? accentColor : isUnlocked ? `${accentColor}80` : isPending ? "#3182ce" : isEligible ? accentColor : "#252525" }}>
+                    {isLevelCompleted ? 'Completed' : canEnter ? 'Current' : isPending ? 'Pending Approval' : isUnlocked ? `VIP ${tier.vip_level}` : isEligible ? 'Eligible' : 'Locked'}
                   </div>
 
                   <div className="flex items-center gap-6 mt-4">
                     <div className="relative h-20 w-20 rounded-[22px] bg-white/5 border flex items-center justify-center overflow-hidden group-hover:border-white/20 transition-all"
-                      style={{ borderColor: isCurrentRoom ? `${accentColor}50` : "rgba(255,255,255,0.1)" }}>
+                      style={{ borderColor: canEnter || isEligible ? `${accentColor}50` : "rgba(255,255,255,0.1)" }}>
                       <img src="/images/icons/shopify.png" alt="Shopify" className="w-full h-full object-cover" 
                         style={{ opacity: isLocked ? 0.3 : 1 }} />
                       {isLocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><Lock size={20} className="text-white/40" /></div>}
@@ -340,8 +377,8 @@ export default function Tasks() {
                       </h3>
                       <div className="flex flex-wrap gap-3">
                         <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
-                          style={{ background: isUnlocked ? `${accentColor}15` : "rgba(255,255,255,0.03)", border: `1px solid ${isUnlocked ? `${accentColor}30` : "rgba(255,255,255,0.05)"}` }}>
-                          <span style={{ color: isUnlocked ? accentColor : "rgba(255,255,255,0.2)" }}>{commission}%</span>
+                          style={{ background: isUnlocked || isEligible ? `${accentColor}15` : "rgba(255,255,255,0.03)", border: `1px solid ${isUnlocked || isEligible ? `${accentColor}30` : "rgba(255,255,255,0.05)"}` }}>
+                          <span style={{ color: isUnlocked || isEligible ? accentColor : "rgba(255,255,255,0.2)" }}>{commission}%</span>
                         </div>
                         <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
                           style={{ background: "rgba(212,175,55,0.05)", border: "1px solid rgba(212,175,55,0.15)" }}>
@@ -356,23 +393,21 @@ export default function Tasks() {
                       <div className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#38A169]/20 text-[#38A169] border border-[#38A169]/30">
                         Completed
                       </div>
-                    ) : isUnlocked ? (
-                      isPreviousLevelCompleted ? (
-                        <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-6 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0D0D0D] transition-colors">
-                          Open
-                        </button>
-                      ) : (
-                        <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
-                          <Lock size={16} className="text-white/20" />
-                        </div>
-                      )
                     ) : isPending ? (
-                      <button onClick={() => router.push("/support")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[8px] uppercase tracking-widest bg-white/5 border border-white/10 text-white/40 hover:text-[#D4AF37] hover:border-[#D4AF37]/30 transition-all flex-col">
+                      <button onClick={() => router.push("?chat=true")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[8px] uppercase tracking-widest bg-white/5 border border-white/10 text-white/40 hover:text-[#D4AF37] hover:border-[#D4AF37]/30 transition-all flex-col">
                         <MessageSquare size={10} className="mb-1" />
                         <span>Contact Support</span>
                       </button>
+                    ) : isUnlocked ? (
+                        <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-6 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0D0D0D] transition-colors shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+                          Open
+                        </button>
+                    ) : isPending ? (
+                        <button onClick={() => router.push("?chat=true")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#3182CE] text-white hover:bg-[#2B6CB0] transition-colors shadow-[0_4px_15px_rgba(49,130,206,0.3)]">
+                          Contact Support
+                        </button>
                     ) : isEligible ? (
-                      <button onClick={() => handleRequestUnlock(tier.vip_level)} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#D4AF37] text-[#0D0D0D] hover:bg-[#F0D060] transition-colors">
+                      <button onClick={() => handleRequestUnlock(tier.vip_level)} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#D4AF37] text-[#0D0D0D] hover:bg-[#F0D060] transition-colors shadow-[0_4px_15px_rgba(212,175,55,0.4)]">
                         Unlock
                       </button>
                     ) : (
@@ -382,10 +417,10 @@ export default function Tasks() {
                     )}
                   </div>
 
-                  {/* Sequential Error Hint */}
-                  {!isPreviousLevelCompleted && !isLocked && !isUnlocked && (
+                  {/* Sequential Error Hint (only if Eligible but previous not complete) */}
+                  {isEligible && !isPreviousLevelCompleted && (
                     <p className="text-[8px] font-bold text-[#E53E3E] uppercase mt-4 tracking-widest flex items-center gap-1.5">
-                      <AlertCircle size={10} /> Please complete Level {tier.vip_level - 1} first
+                      <AlertCircle size={10} /> Please complete Level {tier.vip_level - 1} tasks first
                     </p>
                   )}
                 </motion.div>

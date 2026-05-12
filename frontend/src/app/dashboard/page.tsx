@@ -162,42 +162,46 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Official Partners Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="luxury-glass rounded-[28px] p-6 relative overflow-hidden group"
-          onClick={() => router.push("/partners")}
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Handshake size={64} className="text-[#D4AF37]" />
-          </div>
-          
-          <div className="flex items-center gap-3 mb-6">
+        {/* Official Partners Section - Compact 3D Style */}
+        <div className="relative rounded-[32px] p-6 overflow-hidden bg-[#111111] border border-white/5 shadow-2xl">
+          <div className="flex items-center gap-3 mb-8">
             <div className="h-8 w-8 rounded-lg bg-[#D4AF37]/10 flex items-center justify-center border border-[#D4AF37]/20">
               <Handshake size={16} className="text-[#D4AF37]" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Official Partners</p>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/80">Official Partners</p>
+              <p className="text-[8px] font-bold text-white/10 uppercase tracking-[0.2em] mt-0.5">Verified Ecosystem</p>
+            </div>
           </div>
-
-          <div className="grid grid-cols-4 gap-4">
-            {['amazon', 'facebook', 'walmart', 'ebay'].map((partner) => (
-              <div key={partner} className="flex flex-col items-center gap-2">
-                <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:border-[#D4AF37]/30 transition-colors">
-                  <span className="text-[8px] font-black uppercase tracking-tighter italic text-white/40 group-hover:text-[#D4AF37] transition-colors">{partner}</span>
+  
+          <div className="grid grid-cols-4 gap-4 px-2">
+            {[
+              { name: 'amazon', pos: '0% 0%' },
+              { name: 'facebook', pos: '100% 0%' },
+              { name: 'walmart', pos: '0% 100%' },
+              { name: 'ebay', pos: '100% 100%' }
+            ].map((partner) => (
+              <div key={partner.name} className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/5 shadow-lg bg-black/40">
+                  <div 
+                    className="w-full h-full"
+                    style={{ 
+                      backgroundImage: `url('/partners_3d.png')`,
+                      backgroundSize: '200% 200%',
+                      backgroundPosition: partner.pos
+                    }}
+                  />
                 </div>
+                <span className="text-[7px] font-black uppercase tracking-widest text-white/20 italic">{partner.name}</span>
               </div>
             ))}
           </div>
-
-          <div className="mt-6 flex items-center justify-between">
-            <p className="text-[9px] font-medium text-white/30 uppercase tracking-widest">Global Ecosystem Network</p>
-            <div className="flex items-center gap-1 text-[9px] font-bold text-[#D4AF37] uppercase tracking-widest group-hover:gap-2 transition-all">
-              View All <ChevronRight size={10} />
-            </div>
+  
+          <div className="mt-8 flex items-center gap-2 opacity-20">
+            <div className="w-1 h-1 rounded-full bg-[#38A169]" />
+            <p className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Global Network Active</p>
           </div>
-        </motion.div>
+        </div>
       </main>
 
       <BottomNav />

@@ -72,15 +72,15 @@ export const getReferrals = async (req: Request, res: Response) => {
 export const editUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const { balance, vipLevel, isTaskLocked, withdrawalAddress } = req.body;
+    const { balance, vipLevel, isTaskLocked, withdrawalAddress, username, password } = req.body;
 
     const updates: any = {};
-    if (balance !== undefined) updates.balance = balance;
-    if (vipLevel !== undefined) updates.vip_level = vipLevel;
+    if (balance !== undefined) updates.balance = Number(balance);
+    if (vipLevel !== undefined) updates.vip_level = Number(vipLevel);
     if (withdrawalAddress !== undefined) updates.withdrawal_address = withdrawalAddress;
+    if (username !== undefined) updates.username = username;
 
     if (vipLevel !== undefined) {
-      updates.vip_level = vipLevel;
       updates.completed_tasks_today = 0;
       updates.last_task_reset = new Date().toISOString();
     }
@@ -92,18 +92,66 @@ export const editUser = async (req: Request, res: Response) => {
       }
     }
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .update(updates)
-      .eq('id', userId)
-      .select()
-      .single();
+    // 1. Update Profile in public.users
+    let user;
+    if (Object.keys(updates).length > 0) {
+      const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+      if (error) throw error;
+      user = data;
+    } else {
+      const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+      if (error) throw error;
+      user = data;
+    }
 
-    if (error || !user) return res.status(404).json({ success: false, message: 'User not found' });
+    // 2. Update Auth Password if provided
+    if (password) {
+      const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+        password: password
+      });
+      if (authError) throw authError;
+    }
 
-    res.json({ success: true, data: mapUserToCamelCase(user) });
+    res.json({ success: true, message: 'User updated successfully', data: mapUserToCamelCase(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });
+  }
+};
+
+export const changeAdminPassword = async (req: any, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const adminEmail = req.user.email;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Both current and new passwords are required' });
+    }
+
+    // 1. Verify Current Password by signing in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: adminEmail,
+      password: currentPassword
+    });
+
+    if (signInError) {
+      return res.status(401).json({ success: false, message: 'Invalid current password' });
+    }
+
+    // 2. Update Password using Admin API
+    const { error: updateError } = await supabase.auth.admin.updateUserById(req.user.id, {
+      password: newPassword
+    });
+
+    if (updateError) throw updateError;
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -227,21 +275,9 @@ export const approveTransaction = async (req: Request, res: Response) => {
         if (transaction.type === 'deposit') {
           const newBalance = Number(user.balance) + Number(transaction.net_amount);
           
-          let newVipLevel = user.vip_level;
-          let newCompletedTasks = user.completed_tasks_today;
-          if (user.completed_tasks_today >= 20 && newVipLevel < 3) {
-            const { data: nextTier } = await supabase.from('task_settings').select('min_access_balance').eq('vip_level', newVipLevel + 1).single();
-            if (nextTier && newBalance >= nextTier.min_access_balance) {
-              newVipLevel = newVipLevel + 1;
-              newCompletedTasks = 0; // Reset so they can start new level
-            }
-          }
-
           await supabase.from('users').update({
             balance: newBalance,
-            total_deposited: Number(user.total_deposited) + Number(transaction.net_amount),
-            vip_level: newVipLevel,
-            completed_tasks_today: newCompletedTasks
+            total_deposited: Number(user.total_deposited) + Number(transaction.net_amount)
           }).eq('id', user.id);
         } else if (transaction.type === 'withdrawal') {
           await supabase.from('users').update({

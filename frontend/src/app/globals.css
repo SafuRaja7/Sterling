@@ -160,6 +160,9 @@ body {
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  .bg-gold-gradient {
+    background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold) 50%, var(--gold-light) 100%);
+  }
   .text-gold-shimmer {
     background: linear-gradient(90deg, var(--gold-dark), var(--gold-light), var(--gold), var(--gold-light), var(--gold-dark));
     background-size: 200% auto;

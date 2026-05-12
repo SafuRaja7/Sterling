@@ -34,7 +34,7 @@ export default function SupportWidget() {
   useEffect(() => {
     if (!token || !user || isHidden) return;
 
-    if (isOpen && messages.length === 0) {
+    if (isOpen) {
       fetchThread();
     }
 
@@ -175,24 +175,32 @@ export default function SupportWidget() {
                 </div>
               ) : (
                 messages.map((msg) => {
-                  const isUser = msg.sender_type === "user";
+                  const sType = msg.sender_type || (msg as any).sender || 'user';
+                  const isUser = sType === "user";
                   return (
-                    <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                    <div key={msg.id} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                      <div className={`max-w-[85%] rounded-[20px] px-4 py-3 ${
                         isUser 
-                          ? "bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-br-sm text-right" 
-                          : "bg-[#252525] border border-white/5 rounded-bl-sm"
+                          ? "bg-[#D4AF37] text-[#0D0D0D] rounded-tr-sm" 
+                          : "bg-[#252525] border border-white/5 rounded-tl-sm text-white"
                       }`}>
-                        {!isUser && (
-                          <div className="flex items-center gap-1.5 mb-1 opacity-60">
-                            <ShieldCheck size={10} className="text-[#D4AF37]" />
-                            <span className="text-[8px] font-black uppercase tracking-widest text-[#D4AF37]">Support Team</span>
-                          </div>
-                        )}
-                        <p className={`text-[11px] font-medium leading-relaxed ${isUser ? "text-white" : "text-[rgba(245,245,245,0.9)]"}`}>
+                        <div className="flex items-center gap-1.5 mb-1.5 opacity-60">
+                          {isUser ? (
+                            <>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[#0D0D0D]">You</span>
+                              <UserIcon size={10} className="text-[#0D0D0D]" />
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck size={10} className="text-[#D4AF37]" />
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[#D4AF37]">Support Team</span>
+                            </>
+                          )}
+                        </div>
+                        <p className={`text-[11px] font-bold leading-relaxed`}>
                           {msg.message}
                         </p>
-                        <p className="text-[8px] font-bold text-[rgba(245,245,245,0.3)] mt-2 uppercase tracking-widest">
+                        <p className={`text-[8px] font-bold mt-2 uppercase tracking-widest ${isUser ? "text-[#0D0D0D]/40" : "text-white/20"}`}>
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>

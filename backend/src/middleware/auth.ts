@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/db';
+import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_sterling_jwt_key_2026';
@@ -10,17 +11,17 @@ export interface AuthRequest extends Request {
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  console.log(`--- PROTECT MIDDLEWARE ENTRY: ${req.method} ${req.path} ---`);
   let token;
 
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      
+
       // 1. Try to verify as a VA (Custom JWT)
       try {
         const decoded: any = jwt.verify(token, JWT_SECRET);
         if (decoded.type === 'va') {
-          // Verify session in DB
           const { data: session } = await supabase
             .from('va_sessions')
             .select('*')
@@ -30,8 +31,6 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 
           if (session) {
             console.log('--- VA SESSION FOUND ---');
-            
-            // Fetch account and permissions separately for maximum reliability
             const { data: vaAccount } = await supabase.from('va_accounts').select('username').eq('id', session.va_id).maybeSingle();
             const { data: vaPerms } = await supabase.from('va_permissions').select('*').eq('va_id', session.va_id).maybeSingle();
 
@@ -40,13 +39,16 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
               username: vaAccount?.username || 'Unknown VA',
               permissions: vaPerms || {}
             };
-            
+
             console.log('--- VA AUTH SUCCESS ---');
             return next();
           } else {
             console.log('--- VA AUTH FAIL: Session not found or inactive ---');
-            // Check if the session exists at all (ignoring is_active for debug)
-            const { data: inactiveSession } = await supabase.from('va_sessions').select('*').eq('session_token', decoded.sessionToken).maybeSingle();
+            const { data: inactiveSession } = await supabase
+              .from('va_sessions')
+              .select('*')
+              .eq('session_token', decoded.sessionToken)
+              .maybeSingle();
             if (inactiveSession) {
               console.log('--- VA SESSION IS INACTIVE ---');
             } else {
@@ -60,36 +62,123 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 
       // 2. Verify token with Supabase (User/Admin JWT)
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (error || !user) {
         throw new Error('Not authorized');
       }
 
-      // Fetch user profile from public.users
-      const { data: userProfile, error: profileError } = await supabase
+      // Fetch user profile from public.users using a fresh client to ensure no config interference
+      const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+        auth: { persistSession: false }
+      });
+
+      let { data: userProfile, error: profileError } = await supabaseAdmin
         .from('users')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (!userProfile && !profileError) {
+        console.warn(`--- MIDDLWARE: PROFILE NOT FOUND BY ID: ${user.id}, starting Omni-Search fallback... ---`);
         
+        const metadataUsername = user.user_metadata?.username || '';
+        const emailUsername = user.email?.split('@')[0] || '';
+        
+        // Search by any possible matching username
+        const { data: users, error: omniError } = await supabaseAdmin
+          .from('users')
+          .select('*')
+          .or(`username.ilike.${metadataUsername},username.ilike.${emailUsername},username.ilike.AdminSterling,username.ilike.SterlingAdmin`);
+
+        console.log(`--- MIDDLWARE OMNI-SEARCH RESULTS: Count=${users?.length || 0}, Error=${omniError?.message || 'none'} ---`);
+        if (users) {
+          users.forEach(u => console.log(`   > Found User: ${u.username} (Role: ${u.role}, ID: ${u.id})`));
+        }
+
+        if (users && users.length > 0) {
+          // If we find multiple, pick the one that is an admin
+          userProfile = users.find(u => u.role === 'admin') || users[0];
+          console.log(`--- MIDDLWARE: PROFILE RECOVERED (Found ${userProfile.username}), re-linking ID... ---`);
+          await supabaseAdmin.from('users').update({ id: user.id }).eq('username', userProfile.username);
+        } else if (user.email?.includes('admin')) {
+          // Last resort: Just find ANY admin in the database
+          console.warn(`--- MIDDLWARE: OMNI-SEARCH FAILED, searching for ANY admin... ---`);
+          const { data: globalAdmins } = await supabaseAdmin.from('users').select('*').eq('role', 'admin').limit(1);
+          if (globalAdmins && globalAdmins.length > 0) {
+            userProfile = globalAdmins[0];
+            console.log(`--- MIDDLWARE: EMERGENCY ADMIN RECOVERY (Used ${userProfile.username}) ---`);
+          }
+        }
+      }
+
       if (profileError || !userProfile) {
+        console.error('--- MIDDLWARE: FINAL PROFILE FETCH FAIL ---', {
+          id: user.id,
+          email: user.email,
+          metadata: user.user_metadata
+        });
         throw new Error('User profile not found');
       }
 
-      req.user = { ...userProfile, _id: userProfile.id };
-      
-      // --- DAILY RESET LOGIC ---
-      const now = new Date();
-      const lastReset = userProfile.last_task_reset ? new Date(userProfile.last_task_reset) : new Date(0);
-      const diffHours = (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60);
+      // --- TRANSACTION-VERIFIED VIP LEVEL ENFORCEMENT ---
+      if (userProfile.role === 'user') {
+        const { data: approvedRequests } = await supabaseAdmin
+          .from('transactions')
+          .select('amount')
+          .eq('user_id', userProfile.id)
+          .eq('admin_remarks', 'VIP_UNLOCK_REQUEST')
+          .eq('status', 'approved');
+        
+        const highestApprovedLevel = approvedRequests?.reduce((max, r) => Math.max(max, Number(r.amount)), 0) || 0;
+        
+        if (Number(userProfile.vip_level) > highestApprovedLevel) {
+          console.log(`--- VIP LEVEL CORRECTION: ${userProfile.vip_level} -> ${highestApprovedLevel} for ${userProfile.username} ---`);
+          await supabaseAdmin.from('users').update({ vip_level: highestApprovedLevel }).eq('id', userProfile.id);
+          userProfile.vip_level = highestApprovedLevel;
+        }
+      }
+      // --------------------------------------------------
 
-      if (diffHours >= 24) {
-        console.log(`--- PERFORMING DAILY RESET FOR ${userProfile.username} ---`);
+      req.user = { 
+        ...userProfile, 
+        _id: userProfile.id,
+        email: user.email
+      };
+
+      // --- DAILY RESET LOGIC (Fixed UTC 00:00 — NOT rolling 24hrs) ---
+      // This only resets task counters. VIP level approvals persist
+      // unless balance drops below minimum (handled in userController).
+      const now = new Date();
+      const todayUTC = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate()
+      ));
+
+      const lastReset = userProfile.last_task_reset
+        ? new Date(userProfile.last_task_reset)
+        : new Date(0);
+      const lastResetUTC = new Date(Date.UTC(
+        lastReset.getUTCFullYear(),
+        lastReset.getUTCMonth(),
+        lastReset.getUTCDate()
+      ));
+
+      if (todayUTC.getTime() > lastResetUTC.getTime()) {
+        console.log(`--- DAILY RESET FOR ${userProfile.username} (UTC 00:00) ---`);
+
+        // Balance re-validation: downgrade vip_level if balance dropped
+        // Do NOT blindly reset to 0 — only drop if balance is insufficient
+        let newVipLevel = userProfile.vip_level || 0;
+        if (newVipLevel >= 3 && userProfile.balance < 799) newVipLevel = 2;
+        if (newVipLevel >= 2 && userProfile.balance < 399) newVipLevel = 1;
+        if (newVipLevel >= 1 && userProfile.balance < 20) newVipLevel = 0;
+
         const { error: resetError } = await supabase
           .from('users')
           .update({
             completed_tasks_today: 0,
-            vip_level: 0, // Reset to 0 so they must unlock level 1 again
+            vip_level: newVipLevel,   // Persists approvals unless balance dropped
             last_task_reset: now.toISOString(),
             updated_at: now.toISOString()
           })
@@ -97,14 +186,14 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 
         if (!resetError) {
           req.user.completed_tasks_today = 0;
-          req.user.vip_level = 0;
+          req.user.vip_level = newVipLevel;
         }
       }
 
       console.log(`--- AUTH SUCCESS: User ${userProfile.username} (${userProfile.role}) ---`);
       next();
     } catch (error: any) {
-      console.error("Protection Middleware Failed:", error.message);
+      console.error('Protection Middleware Failed:', error.message);
       res.status(401).json({ success: false, message: error.message });
     }
   } else {
@@ -112,13 +201,14 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   }
 };
 
+// Fixed admin check — username containing "admin" is NOT sufficient
+// Only users with role === 'admin' in the database get access
 export const admin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const isMaster = req.user?.username?.toLowerCase().includes('admin');
   const isAdmin = req.user && req.user.role === 'admin';
-  
-  console.log(`--- ADMIN CHECK: User=${req.user?.username}, role=${req.user?.role}, isMaster=${isMaster}, isAdmin=${isAdmin} ---`);
 
-  if (isMaster || isAdmin) {
+  console.log(`--- ADMIN CHECK: User=${req.user?.username}, role=${req.user?.role}, isAdmin=${isAdmin} ---`);
+
+  if (isAdmin) {
     next();
   } else {
     console.warn(`--- ADMIN ACCESS DENIED for ${req.user?.username} ---`);

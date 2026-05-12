@@ -82,7 +82,10 @@ export const getThread = async (req: AuthRequest, res: Response) => {
       success: true,
       data: {
         thread,
-        messages: messages || []
+        messages: (messages || []).map((msg: any) => ({
+          ...msg,
+          sender_type: msg.sender_type || msg.sender || 'user'
+        }))
       }
     });
   } catch (error: any) {
@@ -174,7 +177,12 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.status(201).json({ success: true, data: newMessage });
+    const responseData = {
+      ...newMessage,
+      sender_type: newMessage.sender_type || newMessage.sender || 'user'
+    };
+
+    res.status(201).json({ success: true, data: responseData });
   } catch (error: any) {
     console.error("SEND_MESSAGE_ERROR:", error.message);
     res.status(500).json({ success: false, message: error.message });

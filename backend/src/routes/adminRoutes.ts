@@ -20,7 +20,8 @@ import {
     sendAdminMessage,
     resolveThread,
     getLevelRequests,
-    approveLevelUnlock
+    approveLevelUnlock,
+    changeAdminPassword
 } from '../controllers/adminController';
 import { 
     createVA, 
@@ -34,6 +35,9 @@ import { protect, admin } from '../middleware/auth';
 import { adminOrVA } from '../middleware/vaMiddleware';
 
 const router = express.Router();
+
+// --- ADMIN SELF MANAGEMENT ---
+router.post('/change-password', protect, admin, changeAdminPassword);
 
 // --- VA MANAGEMENT (Admin Only) ---
 router.post('/va', protect, admin, createVA);

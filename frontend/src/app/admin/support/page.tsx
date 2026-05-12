@@ -268,22 +268,41 @@ export default function AdminSupport() {
               {msgLoading ? (
                 <div className="flex justify-center pt-12"><div className="w-8 h-8 border-2 border-[#D4AF37]/20 border-t-[#D4AF37] rounded-full animate-spin" /></div>
               ) : (
-                messages.map((msg, i) => (
-                  <div key={msg.id || i} className={`flex ${msg.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[72%] px-5 py-3.5 rounded-2xl text-[13px] font-semibold leading-relaxed ${
-                      msg.sender_type === "admin" ? "text-[#0D0D0D] rounded-tr-none" : "text-[#F5F5F5] rounded-tl-none"
-                    }`}
-                      style={msg.sender_type === "admin"
-                        ? { background: "linear-gradient(135deg, #A08020, #D4AF37)" }
-                        : { background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.08)" }
-                      }>
-                      {msg.message}
-                      <p className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === "admin" ? "text-right" : "text-left"}`}>
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
+                messages.map((msg, i) => {
+                  const sType = msg.sender_type || (msg as any).sender || 'user';
+                  const isAdmin = sType === "admin";
+                  return (
+                    <div key={msg.id || i} className={`flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>
+                      <div className={`max-w-[72%] px-5 py-3.5 rounded-2xl ${
+                        isAdmin ? "text-[#0D0D0D] rounded-tr-none" : "text-[#F5F5F5] rounded-tl-none"
+                      }`}
+                        style={isAdmin
+                          ? { background: "linear-gradient(135deg, #A08020, #D4AF37)" }
+                          : { background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.08)" }
+                        }>
+                        <div className={`flex items-center gap-1.5 mb-2 opacity-60 ${isAdmin ? "justify-end" : "justify-start"}`}>
+                          {isAdmin ? (
+                            <>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[#0D0D0D]">Customer Support</span>
+                              <ShieldCheck size={10} className="text-[#0D0D0D]" />
+                            </>
+                          ) : (
+                            <>
+                              <UserIcon size={10} className="text-[#D4AF37]" />
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[#D4AF37]">{selectedThread.users.username}</span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-[13px] font-semibold leading-relaxed">
+                          {msg.message}
+                        </p>
+                        <p className={`text-[9px] mt-2 opacity-50 ${isAdmin ? "text-[#0D0D0D]/40 text-right" : "text-white/20 text-left"}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </div>

@@ -52,7 +52,7 @@ export default function AdminDashboard() {
   // MODALS STATE
   const [editingUser, setEditingUser] = useState<any>(null);
   const [comboUser, setComboUser] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ balance: 0, isTaskLocked: false, withdrawalAddress: "" });
+  const [editForm, setEditForm] = useState({ balance: 0, isTaskLocked: false, withdrawalAddress: "", vipLevel: 0, username: "", password: "" });
   const [comboForms, setComboForms] = useState([{ position: 5, itemsCount: 3, price: 100, commission: 20 }]);
   const [userCombos, setUserCombos] = useState<any[]>([]);
 
@@ -63,6 +63,7 @@ export default function AdminDashboard() {
 
   const [showNotifTray, setShowNotifTray] = useState(false);
   const [newVA, setNewVA] = useState<any>(null);
+  const [adminPasswordForm, setAdminPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
   // --- REFINED PERMISSION LOGIC ---
   const isMasterAdmin = user?.role === 'admin' || user?.username?.toLowerCase().includes('admin');
@@ -93,8 +94,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (editingUser) setEditForm({
       balance: editingUser.balance || 0,
-      isTaskLocked: editingUser.isTaskLocked || false,
-      withdrawalAddress: editingUser.withdrawalAddress || ""
+      isTaskLocked: editingUser.is_task_locked || editingUser.isTaskLocked || false,
+      withdrawalAddress: editingUser.withdrawal_address || editingUser.withdrawalAddress || "",
+      vipLevel: editingUser.vip_level || editingUser.vipLevel || 0,
+      username: editingUser.username || "",
+      password: "" // Keep empty for security, only update if filled
     });
   }, [editingUser]);
 
@@ -195,8 +199,26 @@ export default function AdminDashboard() {
     try {
       await api.put(`/admin/users/${userId}`, { vipLevel });
       toast.success(`VIP ${vipLevel} Activated`);
-      fetchAll();
     } catch { toast.error("Failed to update VIP"); }
+  };
+
+  const handleAdminPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPasswordForm.newPassword !== adminPasswordForm.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    const loadingToast = toast.loading("Updating password...");
+    try {
+      await api.post("/admin/change-password", {
+        currentPassword: adminPasswordForm.currentPassword,
+        newPassword: adminPasswordForm.newPassword
+      });
+      toast.success("Password changed successfully", { id: loadingToast });
+      setAdminPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to change password", { id: loadingToast });
+    }
   };
 
   const resetUserTasks = async (userId: string) => {
@@ -472,6 +494,7 @@ export default function AdminDashboard() {
           <TAB label="Support" active={activeTab === "support"} onClick={() => { setActiveTab("support"); router.push("/admin/support"); }} badge={supportCount} />
           {isMasterAdmin && <TAB label="Products" active={activeTab === "products"} onClick={() => setActiveTab("products")} />}
           {isMasterAdmin && <TAB label="VAs" active={activeTab === "vas"} onClick={() => setActiveTab("vas")} />}
+          {isMasterAdmin && <TAB label="Security" active={activeTab === "security"} onClick={() => setActiveTab("security")} />}
         </div>
 
         {activeTab === "users" && (
@@ -703,6 +726,40 @@ export default function AdminDashboard() {
                 {data.levelRequests.length === 0 && <div className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest">No pending requests</div>}
               </motion.div>
             )}
+            {activeTab === "security" && (
+              <motion.div key="security" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="max-w-md mx-auto">
+                <div className="luxury-glass rounded-[32px] p-8 border border-white/5 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 rotate-12"><Key size={120} className="text-[#D4AF37]" /></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="h-12 w-12 rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]"><Key size={24} /></div>
+                      <div><h2 className="text-xl font-black text-white tracking-tight uppercase">Admin Security</h2><p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Update Authentication Access</p></div>
+                    </div>
+
+                    <form onSubmit={handleAdminPasswordChange} className="space-y-5">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest px-1">Current Password</label>
+                        <input type="password" required value={adminPasswordForm.currentPassword} onChange={e => setAdminPasswordForm({ ...adminPasswordForm, currentPassword: e.target.value })}
+                          placeholder="••••••••" className="w-full h-14 rounded-2xl bg-black/40 border border-white/5 px-6 text-sm font-bold text-white focus:border-[#D4AF37]/50 focus:bg-black/60 transition-all outline-none" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest px-1">New Password</label>
+                        <input type="password" required value={adminPasswordForm.newPassword} onChange={e => setAdminPasswordForm({ ...adminPasswordForm, newPassword: e.target.value })}
+                          placeholder="••••••••" className="w-full h-14 rounded-2xl bg-black/40 border border-white/5 px-6 text-sm font-bold text-white focus:border-[#D4AF37]/50 focus:bg-black/60 transition-all outline-none" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest px-1">Confirm New Password</label>
+                        <input type="password" required value={adminPasswordForm.confirmPassword} onChange={e => setAdminPasswordForm({ ...adminPasswordForm, confirmPassword: e.target.value })}
+                          placeholder="••••••••" className="w-full h-14 rounded-2xl bg-black/40 border border-white/5 px-6 text-sm font-bold text-white focus:border-[#D4AF37]/50 focus:bg-black/60 transition-all outline-none" />
+                      </div>
+                      <button type="submit" className="w-full h-14 rounded-2xl bg-gold-gradient text-black text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all mt-4">
+                        Update Password
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         )}
       </main>
@@ -737,10 +794,28 @@ export default function AdminDashboard() {
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-sm rounded-[32px] p-8 bg-[#141414] border border-[#D4AF37]/20 shadow-2xl">
               <div className="flex justify-between items-center mb-8"><h3 className="text-sm font-black uppercase text-white tracking-widest">Update Profile</h3><button onClick={() => setEditingUser(null)}><XCircle size={24} className="text-white/30" /></button></div>
               <form onSubmit={handleEditSubmit} className="space-y-6">
+                <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Username</label><input type="text" value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Reset Password</label>
+                  <input type="password" placeholder="Leave empty to keep same" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" />
+                  <p className="text-[7px] font-bold text-white/20 mt-1 uppercase px-1">Only fill this if you want to change their password</p>
+                </div>
                 <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Balance ($)</label><input type="number" step="0.01" value={editForm.balance} onChange={e => setEditForm({ ...editForm, balance: parseFloat(e.target.value) })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
                 <div><label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">Wallet Address</label><input type="text" value={editForm.withdrawalAddress} onChange={e => setEditForm({ ...editForm, withdrawalAddress: e.target.value })} className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold" /></div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-white/40 block mb-2 px-1">VIP Level</label>
+                  <select 
+                    value={editForm.vipLevel} 
+                    onChange={e => setEditForm({ ...editForm, vipLevel: parseInt(e.target.value) })}
+                    className="input-gold w-full rounded-2xl py-4 px-5 bg-white/5 border-white/10 text-white font-bold appearance-none cursor-pointer"
+                  >
+                    {[0, 1, 2, 3].map(lvl => (
+                      <option key={lvl} value={lvl} className="bg-[#141414]">VIP {lvl}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10"><div className="flex items-center gap-3"><Key size={18} className="text-[#D4AF37]" /><span className="text-[10px] font-black uppercase text-white/80">Lock Tasks</span></div><button type="button" onClick={() => setEditForm({ ...editForm, isTaskLocked: !editForm.isTaskLocked })} className={`w-12 h-6 rounded-full transition-all relative ${editForm.isTaskLocked ? 'bg-[#E53E3E]' : 'bg-white/10'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${editForm.isTaskLocked ? 'left-7' : 'left-1'}`} /></button></div>
-                <button type="submit" style={{ background: GOLDEN_GRADIENT, color: "#0D0D0D" }} className="w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#D4AF37]/30">Save Changes</button>
+                <button type="submit" className="w-full py-4 rounded-2xl bg-gold-gradient text-black font-black uppercase tracking-widest shadow-[0_4px_25px_rgba(212,175,55,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all">Save Changes</button>
               </form>
             </motion.div>
           </motion.div>

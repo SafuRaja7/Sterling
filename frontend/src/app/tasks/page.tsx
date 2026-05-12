@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Lock, Crown, CheckCircle, X, ShoppingBag, ArrowLeft, Wallet, TrendingUp, MessageSquare } from "lucide-react";
+import { Zap, Lock, Crown, CheckCircle, X, ShoppingBag, ArrowLeft, Wallet, TrendingUp, MessageSquare, AlertCircle } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
@@ -44,10 +44,13 @@ export default function Tasks() {
     }
   };
 
+  const startMatching = async () => {
+    if (!user) return;
+
     const tierLevel = viewTier || 1;
     const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
     
-    if (!user || tasksInThisTier >= 20) {
+    if (tasksInThisTier >= 20) {
       toast.error("Daily task limit reached for this level. Move to next level or wait for reset."); 
       return;
     }
@@ -384,15 +387,6 @@ export default function Tasks() {
                     <p className="text-[8px] font-bold text-[#E53E3E] uppercase mt-4 tracking-widest flex items-center gap-1.5">
                       <AlertCircle size={10} /> Please complete Level {tier.vip_level - 1} first
                     </p>
-                  )}
-                </motion.div>
-              );
-            })}
-
-                  {/* Subtle Background Glow */}
-                  {isCurrentRoom && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full blur-[80px] opacity-10 pointer-events-none transition-all"
-                      style={{ background: accentColor }} />
                   )}
                 </motion.div>
               );

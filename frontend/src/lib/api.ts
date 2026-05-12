@@ -8,7 +8,6 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   try {
-    // Read directly from localStorage to avoid circular dependencies with the store
     const authData = localStorage.getItem('sterling-auth-storage');
     if (authData) {
       const parsed = JSON.parse(authData);

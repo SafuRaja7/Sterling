@@ -200,7 +200,8 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // --- 24H EXPIRY CHECK (Redundant but safe due to auth middleware) ---
+    // --- 24H EXPIRY CHECK ---
+    const lastReset = user.last_task_reset ? new Date(user.last_task_reset) : new Date(0);
     const diffHours = (new Date().getTime() - lastReset.getTime()) / (1000 * 60 * 60);
     if (diffHours >= 24) {
       return res.status(403).json({
@@ -443,9 +444,6 @@ export const completeTask = async (req: AuthRequest, res: Response) => {
     const newBalance = Number(user.balance) + Number(task.commission);
     const newTotalCommission = Number(user.total_commission) + Number(task.commission);
     const newSessionCommission = Number(user.current_session_commission) + Number(task.commission);
-    let newCompletedTasks = user.completed_tasks_today + 1;
-
-    // SEQUENTIAL TASK PROGRESSION (0-60)
     const newCompletedTasks = user.completed_tasks_today + 1;
     let newVipLevel = user.vip_level; // Stay at current unlocked level
 

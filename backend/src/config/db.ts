@@ -11,13 +11,11 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
-  }
+  auth: { persistSession: false }
 });
 
 export const connectDB = async () => {
   console.log('Supabase initialized with URL:', supabaseUrl);
+  console.log('Supabase Key (Service Role) present:', !!supabaseKey);
+  if (supabaseKey) console.log('Supabase Key length:', supabaseKey.length);
 };

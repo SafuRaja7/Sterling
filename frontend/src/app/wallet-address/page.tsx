@@ -111,7 +111,12 @@ export default function WalletAddress() {
               </div>
               <p className="text-[9px] font-medium text-white/30 italic ml-1 leading-relaxed">
                 {isLocked 
-                  ? "* For security reasons, withdrawal addresses cannot be changed once saved. Contact support if you need assistance."
+                  ? (
+                    <span>
+                      * For security reasons, withdrawal addresses cannot be changed once saved. 
+                      <button onClick={() => router.push("?chat=true")} className="text-[#D4AF37] font-bold ml-1 hover:underline">Contact support</button> if you need assistance.
+                    </span>
+                  )
                   : "* Please double check your address. Transactions on TRC20 are irreversible and this address will be locked after saving."
                 }
               </p>

@@ -271,9 +271,12 @@ export default function Wallet() {
                     className={`input-gold w-full rounded-2xl py-4 pl-12 pr-5 text-xs font-bold ${user?.withdrawalAddress ? 'opacity-50 cursor-not-allowed bg-black/40' : ''}`}
                   />
                   {user?.withdrawalAddress && (
-                    <p className="text-[8px] font-bold text-[rgba(245,245,245,0.3)] mt-2 uppercase tracking-widest text-center">
-                      Wallet address is locked. Contact support to change.
-                    </p>
+                    <button 
+                      onClick={() => router.push("?chat=true")}
+                      className="w-full text-[8px] font-bold text-[#D4AF37] hover:text-[#F0D060] transition-colors mt-2 uppercase tracking-widest text-center"
+                    >
+                      Wallet address is locked. Click here to contact support.
+                    </button>
                   )}
                 </div>
               </div>

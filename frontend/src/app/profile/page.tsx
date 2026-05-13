@@ -18,7 +18,7 @@ const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A
 
 export default function Profile() {
   const router = useRouter();
-  const { user, token, logout, setUser } = useAuthStore();
+  const { user, token, logout, setUser, _hasHydrated } = useAuthStore();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -27,9 +27,14 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!token) { router.push("/login"); return; }
-    fetchData();
-  }, [token]);
+    if (_hasHydrated) {
+      if (!token) {
+        router.push("/login");
+      } else {
+        fetchData();
+      }
+    }
+  }, [_hasHydrated, token, router]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -41,8 +46,11 @@ export default function Profile() {
       setUser(profileRes.data.data);
       setTasks(historyRes.data.data || []);
     } catch (err: any) {
-      setModalError("Identity synchronization failed. Terminal access suspended.");
-      logout(); router.push("/login");
+      console.error("Profile fetch error:", err);
+      if (err.response?.status === 401) {
+        setModalError("Identity synchronization failed. Terminal access suspended.");
+        logout(); router.push("/login");
+      }
     } finally { setLoading(false); }
   };
 

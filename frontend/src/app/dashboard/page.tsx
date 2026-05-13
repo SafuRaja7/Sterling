@@ -21,7 +21,7 @@ const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A
 
 export default function Dashboard() {
   const router = useRouter();
-  const { user, token, logout } = useAuthStore();
+  const { user, token, logout, _hasHydrated } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalEarnings: 0,
@@ -30,9 +30,14 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    if (!token) { router.push("/login"); return; }
-    fetchDashboard();
-  }, [token]);
+    if (_hasHydrated) {
+      if (!token) {
+        router.push("/login");
+      } else {
+        fetchDashboard();
+      }
+    }
+  }, [_hasHydrated, token, router]);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -48,9 +53,12 @@ export default function Dashboard() {
       });
     } catch (err: any) {
       console.error("Dashboard error:", err);
-      toast.error(err.response?.data?.message || "Session failed");
-      logout();
-      router.push("/login");
+      // Only redirect on actual 401 Unauthorized errors
+      if (err.response?.status === 401) {
+        toast.error("Session expired. Please login again.");
+        logout();
+        router.push("/login");
+      }
     } finally {
       setLoading(false);
     }

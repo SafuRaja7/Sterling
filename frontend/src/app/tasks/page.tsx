@@ -20,7 +20,7 @@ const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A
 
 export default function Tasks() {
   const router = useRouter();
-  const { user, token } = useAuthStore();
+  const { user, token, _hasHydrated } = useAuthStore();
   const [tiers, setTiers] = useState<any[]>([]);
   const [currentTask, setCurrentTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -30,13 +30,20 @@ export default function Tasks() {
   const [viewTier, setViewTier] = useState<number | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!token) { router.push("/login"); return; }
-    fetchTiers();
-    const interval = setInterval(() => fetchTiers(true), 15000);
-    return () => clearInterval(interval);
-  }, [token]);
+    if (_hasHydrated) {
+      if (!token) {
+        router.push("/login");
+      } else {
+        setIsReady(true);
+        fetchTiers();
+        const interval = setInterval(() => fetchTiers(true), 15000);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [_hasHydrated, token, router]);
 
   const fetchTiers = async (silentUserUpdate = false) => {
     try {

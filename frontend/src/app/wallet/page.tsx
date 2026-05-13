@@ -19,7 +19,7 @@ const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A
 
 export default function Wallet() {
   const router = useRouter();
-  const { user, token, logout } = useAuthStore();
+  const { user, token, logout, _hasHydrated } = useAuthStore();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
@@ -33,9 +33,14 @@ export default function Wallet() {
   const PAYMENT_ADDRESS = "TS9CkrB8Ri9qbtf4M3v4bLw9k9mK4k1qAo";
 
   useEffect(() => {
-    if (!token) { router.push("/login"); return; }
-    fetchData();
-  }, [token]);
+    if (_hasHydrated) {
+      if (!token) {
+        router.push("/login");
+      } else {
+        fetchData();
+      }
+    }
+  }, [_hasHydrated, token, router]);
 
   useEffect(() => {
     if (activeTab === "withdraw" && user?.withdrawalAddress) {
@@ -53,8 +58,11 @@ export default function Wallet() {
       useAuthStore.getState().setUser(profileRes.data.data);
       setTransactions(txRes.data.data || []);
     } catch (err: any) {
-      setModalError("Please login again.");
-      logout(); router.push("/login");
+      console.error("Wallet fetch error:", err);
+      if (err.response?.status === 401) {
+        setModalError("Please login again.");
+        logout(); router.push("/login");
+      }
     } finally {
       setLoading(false);
     }

@@ -27,6 +27,8 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
   login: (user: User, token: string) => void;
   logout: () => void;
   updateUser: (data: Partial<User>) => void;
@@ -39,6 +41,9 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      _hasHydrated: false,
+
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
       
       login: (user, token) => {
         set({ user, token, isAuthenticated: true });
@@ -57,6 +62,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'sterling-auth-storage',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      }
     }
   )
 );

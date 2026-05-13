@@ -40,7 +40,7 @@ const TAB = ({ label, active, onClick, badge }: any) => (
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, token, logout, setUser } = useAuthStore();
+  const { user, token, logout, setUser, _hasHydrated } = useAuthStore();
   const { notifications, setNotifications } = useAdminNotifications();
   const [activeTab, setActiveTab] = useState("users");
   const [loading, setLoading] = useState(true);
@@ -116,9 +116,14 @@ export default function AdminDashboard() {
   }, [comboUser]);
 
   useEffect(() => {
-    if (!token) { router.push("/login"); return; }
-    fetchAll();
-  }, [token, user?.role]);
+    if (_hasHydrated) {
+      if (!token) {
+        router.push("/login");
+      } else {
+        fetchAll();
+      }
+    }
+  }, [_hasHydrated, token, user?.role, router]);
 
   const fetchAll = async () => {
     setLoading(true);

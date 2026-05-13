@@ -106,7 +106,12 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
         withdrawalAddress: user.withdrawal_address,
         vipLevelRequest: latestTx?.amount || 0,
         vipLevelRequestStatus: latestTx?.status || 'none',
-        pendingTask
+        pendingTask,
+        // Dashboard compatibility
+        totalEarnings: user.total_commission,
+        todayEarnings: todayEarning,
+        completedTasks: user.completed_tasks_today,
+        daily_tasks_completed: user.completed_tasks_today
       }
     });
   } catch (error) {

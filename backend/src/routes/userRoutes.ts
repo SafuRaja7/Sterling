@@ -9,6 +9,7 @@ router.use(protect);
 router.get('/profile', getProfile);
 router.get('/transactions', getTransactions);
 router.get('/task-settings', getTaskSettings);
+router.get('/tiers', getTaskSettings);
 router.post('/room/select', selectRoom);
 router.post('/task/generate', generateTask);
 router.post('/task/complete', completeTask);

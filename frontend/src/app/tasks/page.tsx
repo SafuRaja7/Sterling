@@ -528,9 +528,9 @@ export default function Tasks() {
                 )}
                 <button 
                   onClick={() => { setModalError(null); setSuccessMessage(null); }}
-                  className="h-18 w-full rounded-[25px] bg-white/5 border border-white/10 text-white font-black uppercase text-[12px] tracking-[0.3em] hover:bg-white/10 transition-all active:scale-95"
+                  className="h-20 w-full rounded-[30px] bg-gold-gradient text-black font-black uppercase text-[14px] tracking-[0.4em] shadow-[0_20px_40px_rgba(212,175,55,0.3)] hover:scale-[1.02] transition-all active:scale-95"
                 >
-                  Dismiss Protocol
+                  Dismiss
                 </button>
               </div>
             </motion.div>

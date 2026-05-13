@@ -369,15 +369,20 @@ export default function Tasks() {
           
           <div className="space-y-6">
             {tiers.map((tier, i) => {
-              const reqBalance = tier.min_access_balance || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
-              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level && user.balance >= reqBalance;
-              const isPending = user.vipLevelRequest === tier.vip_level && user.vipLevelRequestStatus === 'pending';
-              const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
+              const reqBalance = Number(tier.min_access_balance) || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
+              const userVip = Number(user.vipLevel || 0);
+              const tierVip = Number(tier.vip_level);
+              
+              // Only unlocked if user's approved VIP level is at least this tier, balance is met, and it's not Level 1 for a Level 0 user
+              const isUnlocked = userVip >= tierVip && user.balance >= reqBalance && userVip > 0;
+              
+              const isPending = Number(user.vipLevelRequest) === tierVip && user.vipLevelRequestStatus === 'pending';
+              const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tierVip - 1) * 20));
               const isComp = tasksDone >= 20;
-              const accent = tierColors[tier.vip_level] || "#D4AF37";
-
-              const prevLevelTasksRequired = (tier.vip_level - 1) * 20;
-              const hasFinishedPrevLevel = tier.vip_level === 1 || user.completedTasksToday >= prevLevelTasksRequired;
+              const accent = tierColors[tierVip] || "#D4AF37";
+              
+              const prevLevelTasksRequired = (tierVip - 1) * 20;
+              const hasFinishedPrevLevel = tierVip === 1 || user.completedTasksToday >= prevLevelTasksRequired;
               const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance && hasFinishedPrevLevel;
 
               return (
@@ -386,7 +391,14 @@ export default function Tasks() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  onClick={() => isUnlocked && !isComp && (setViewTier(tier.vip_level), setView('engine'))}
+                  onClick={() => {
+                    if (isUnlocked && !isComp) {
+                      setViewTier(tierVip);
+                      setView('engine');
+                    } else if (isEligible) {
+                      handleRequestUnlock(tierVip);
+                    }
+                  }}
                   className={`relative overflow-hidden rounded-[45px] p-10 border transition-all duration-700 shadow-2xl ${
                     isUnlocked ? "bg-[#D4AF37]/5 border-[#D4AF37]/30 cursor-pointer hover:bg-[#D4AF37]/10 hover:translate-x-2" : 
                     isPending ? "bg-blue-500/5 border-blue-500/20 opacity-90" :

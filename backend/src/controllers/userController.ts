@@ -674,9 +674,10 @@ export const selectRoom = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Update user's active vip_level (within approved range)
-    await supabase.from('users').update({ vip_level: vipLevel }).eq('id', userId);
-
+    // FIXED: Removed unauthorized vip_level update. 
+    // The user's vip_level in the database is the APPROVED level.
+    // Entering a room shouldn't update the user's permanent approval level.
+    
     res.json({ success: true, message: `Entered VIP ${vipLevel} room successfully.` });
   } catch (error) {
     res.status(500).json({ success: false, message: (error as Error).message });

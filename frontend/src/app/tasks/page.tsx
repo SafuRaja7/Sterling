@@ -451,22 +451,22 @@ export default function Tasks() {
                         </div>
                       ) : isEligible ? (
                         <button 
-                          onClick={(e) => { e.stopPropagation(); handleRequestUnlock(tier.vip_level); }}
+                          onClick={(e) => { e.stopPropagation(); handleRequestUnlock(tierVip); }}
                           className="h-16 px-10 rounded-2xl bg-white/10 border border-white/20 text-white flex items-center justify-center font-black uppercase text-[12px] tracking-[0.3em] hover:bg-gold-gradient hover:text-black hover:border-transparent transition-all duration-300 shadow-xl"
                         >
-                          Unlock Terminal
+                          Unlock
                         </button>
                       ) : (
                         <div className="flex flex-col gap-3 w-full">
                           <div className="h-14 px-8 rounded-2xl bg-white/5 border border-white/10 text-white/20 flex items-center justify-center font-black uppercase text-[10px] tracking-[0.2em] shadow-inner">
-                            {user.balance < reqBalance ? "Insufficient Balance" : "Prerequisite Required"}
+                            {user.balance < reqBalance ? "Locked: $"+reqBalance : "Prerequisite"}
                           </div>
                           {user.balance < reqBalance && (
                             <button 
                               onClick={(e) => { e.stopPropagation(); router.push('/deposit'); }}
                               className="text-[9px] font-black text-[#D4AF37] uppercase tracking-[0.3em] hover:underline transition-all"
                             >
-                              Add Funds to Unlock →
+                              Recharge to Unlock →
                             </button>
                           )}
                         </div>

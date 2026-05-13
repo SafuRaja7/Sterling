@@ -375,7 +375,10 @@ export default function Tasks() {
               const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
               const isComp = tasksDone >= 20;
               const accent = tierColors[tier.vip_level] || "#D4AF37";
-              const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance;
+
+              const prevLevelTasksRequired = (tier.vip_level - 1) * 20;
+              const hasFinishedPrevLevel = tier.vip_level === 1 || user.completedTasksToday >= prevLevelTasksRequired;
+              const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance && hasFinishedPrevLevel;
 
               return (
                 <motion.div
@@ -427,23 +430,33 @@ export default function Tasks() {
                           <CheckCircle size={28} />
                         </div>
                       ) : isUnlocked ? (
-                        <div className="h-14 px-8 rounded-2xl bg-gold-gradient text-black flex items-center justify-center font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl shadow-[#D4AF37]/30">
-                          Activate
-                        </div>
+                        <button className="h-16 px-10 rounded-2xl bg-gold-gradient text-black flex items-center justify-center font-black uppercase text-[12px] tracking-[0.3em] shadow-[0_15px_30px_rgba(212,175,55,0.4)] hover:scale-105 active:scale-95 transition-all">
+                          Enter Room
+                        </button>
                       ) : isPending ? (
-                        <div className="h-14 w-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/30 shadow-xl">
-                          <Clock size={28} />
+                        <div className="h-16 px-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-500 flex items-center justify-center font-black uppercase text-[10px] tracking-[0.2em] animate-pulse">
+                          Awaiting Admin
                         </div>
                       ) : isEligible ? (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleRequestUnlock(tier.vip_level); }}
                           className="h-16 px-10 rounded-2xl bg-white/10 border border-white/20 text-white flex items-center justify-center font-black uppercase text-[12px] tracking-[0.3em] hover:bg-gold-gradient hover:text-black hover:border-transparent transition-all duration-300 shadow-xl"
                         >
-                          Unlock
+                          Unlock Terminal
                         </button>
                       ) : (
-                        <div className="h-14 w-14 rounded-2xl bg-white/5 flex items-center justify-center text-white/20 border border-white/10 shadow-xl">
-                          <Lock size={28} />
+                        <div className="flex flex-col gap-3 w-full">
+                          <div className="h-14 px-8 rounded-2xl bg-white/5 border border-white/10 text-white/20 flex items-center justify-center font-black uppercase text-[10px] tracking-[0.2em] shadow-inner">
+                            {user.balance < reqBalance ? "Insufficient Balance" : "Prerequisite Required"}
+                          </div>
+                          {user.balance < reqBalance && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); router.push('/deposit'); }}
+                              className="text-[9px] font-black text-[#D4AF37] uppercase tracking-[0.3em] hover:underline transition-all"
+                            >
+                              Add Funds to Unlock →
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

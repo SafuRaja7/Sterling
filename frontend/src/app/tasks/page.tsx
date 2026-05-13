@@ -369,6 +369,7 @@ export default function Tasks() {
           
           <div className="space-y-6">
             {tiers.map((tier, i) => {
+              const tierVip = Number(tier.vip_level);
               const reqBalance = Number(tier.min_access_balance) || (tierVip === 1 ? 20 : tierVip === 2 ? 399 : 799);
               const userVip = Number(user.vipLevel || 0);
               

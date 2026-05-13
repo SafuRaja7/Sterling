@@ -362,38 +362,49 @@ export const completeTask = async (req: AuthRequest, res: Response) => {
     const userId = req.user._id;
     const user = req.user; // Use already corrected user from middleware
 
-    if (!user || !user.pending_task) {
-      return res.status(400).json({ success: false, message: 'No pending task' });
+    // 1. Fetch FRESH user data from database to prevent stale counter issues
+    const { data: freshUser, error: freshError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (freshError || !freshUser) throw new Error('Failed to retrieve fresh user state');
+
+    if (!freshUser.pending_task) {
+      return res.status(400).json({ success: false, message: 'No pending task found in profile' });
     }
 
     const { data: task } = await supabase
       .from('tasks')
       .select('*')
-      .eq('id', user.pending_task)
+      .eq('id', freshUser.pending_task)
       .single();
 
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
 
-    if (user.balance < task.price) {
-      const required = (Number(task.price) - Number(user.balance)).toFixed(2);
+    if (freshUser.balance < task.price) {
+      const required = (Number(task.price) - Number(freshUser.balance)).toFixed(2);
       return res.status(400).json({
         success: false,
         message: `Insufficient balance. You need to deposit at least $${required} to complete this task.`
       });
     }
 
+    // 2. Perform the update
     await supabase.from('tasks').update({ status: 'completed' }).eq('id', task.id);
 
-    const newBalance = Number(user.balance) + Number(task.commission);
-    const newTotalCommission = Number(user.total_commission) + Number(task.commission);
-    const newSessionCommission = Number(user.current_session_commission) + Number(task.commission);
-    const newCompletedTasks = user.completed_tasks_today + 1;
+    const newBalance = Number(freshUser.balance) + Number(task.commission);
+    const newTotalCommission = Number(freshUser.total_commission) + Number(task.commission);
+    const newSessionCommission = Number(freshUser.current_session_commission || 0) + Number(task.commission);
+    const newCompletedTasks = Number(freshUser.completed_tasks_today || 0) + 1;
+
+    console.log(`--- TASK COMPLETION: User ${freshUser.username}, Progress: ${freshUser.completed_tasks_today} -> ${newCompletedTasks} ---`);
 
     const updateData: any = {
       balance: newBalance,
       total_commission: newTotalCommission,
       completed_tasks_today: newCompletedTasks,
-      vip_level: user.vip_level, // Never change vip_level on task completion
       pending_task: null
     };
 
@@ -402,12 +413,15 @@ export const completeTask = async (req: AuthRequest, res: Response) => {
       updateData.current_session_commission = newSessionCommission;
     }
 
-    const { data: updatedUser } = await supabase
+    const { data: updatedUser, error: updateError } = await supabaseAdmin
       .from('users')
       .update(updateData)
       .eq('id', userId)
       .select()
       .single();
+
+    if (updateError) throw updateError;
+
 
     if (task.combo_id) {
       await supabase.from('combos').update({ status: 'completed' }).eq('id', task.combo_id);

@@ -236,11 +236,13 @@ export default function AdminDashboard() {
     }
   };
 
-  const resetUserTasks = async (userId: string) => {
+   const resetUserTasks = async (userId: string) => {
     if (!canResetTasks) { toast.error("Unauthorized: Task Permission Required"); return; }
+    if (!window.confirm("ARE YOU SURE? This will PERMANENTLY RESET this user's daily progress to Task 1 and CANCEL any active combos. This action is irreversible.")) return;
+    
     try {
       await api.post(`/admin/users/${userId}/refresh`);
-      toast.success("Tasks reset successfully");
+      toast.success("User progress hard-reset to Task 1");
       fetchAll();
     } catch { toast.error("Failed to reset tasks"); }
   };

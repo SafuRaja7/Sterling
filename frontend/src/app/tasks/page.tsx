@@ -34,20 +34,22 @@ export default function Tasks() {
   useEffect(() => {
     if (!token) { router.push("/login"); return; }
     fetchTiers();
+    const interval = setInterval(() => fetchTiers(true), 15000);
+    return () => clearInterval(interval);
   }, [token]);
 
-  const fetchTiers = async () => {
-    setLoading(true);
+  const fetchTiers = async (silentUserUpdate = false) => {
     try {
       const [tiersRes, profileRes] = await Promise.all([
-        api.get("/user/task-settings"),
+        api.get("/user/tiers"),
         api.get("/user/profile")
       ]);
-      setTiers(tiersRes.data.data || []);
-      useAuthStore.getState().setUser(profileRes.data.data);
+      setTiers(tiersRes.data.data);
+      if (!silentUserUpdate) {
+        useAuthStore.getState().setUser(profileRes.data.data);
+      }
     } catch (err) { 
-      console.error("Fetch error:", err);
-      toast.error("Failed to sync session"); 
+      console.error("FETCH TIERS FAIL:", err);
     } finally { 
       setLoading(false); 
     }
@@ -88,9 +90,12 @@ export default function Tasks() {
           colors: ['#D4AF37', '#F5E0A0', '#FFFFFF']
         });
         setSuccessMessage(`Operation successful. +$${data.data.completedTask.commission.toFixed(2)} has been credited to your institutional vault.`);
-        setCurrentTask(null);
-        const profileRes = await api.get("/user/profile");
-        useAuthStore.getState().setUser(profileRes.data.data);
+        useAuthStore.getState().setUser(data.data.user);
+        
+        setTimeout(() => {
+          setCurrentTask(null);
+          fetchTiers(true);
+        }, 1500);
       }
     } catch (err: any) {
       setModalError(err.response?.data?.message || "Transaction synchronization failed.");
@@ -220,7 +225,7 @@ export default function Tasks() {
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Operational Load Level</p>
                           <h3 className="text-3xl font-black text-white mt-2 drop-shadow-md">
-                            V{tierLevel} <span className="text-[#D4AF37]/20 mx-1">/</span> {tasksInThisTier}<span className="text-[#D4AF37]/40 text-lg">/20</span>
+                            V{tierLevel} <span className="text-[#D4AF37]/20 mx-1">/</span> Order {tasksInThisTier + (currentTask ? 1 : 0)}<span className="text-[#D4AF37]/40 text-lg">/20</span>
                           </h3>
                         </div>
                         <div className="h-20 w-20 rounded-[30px] bg-gold-gradient flex items-center justify-center shadow-[0_15px_40px_rgba(212,175,55,0.4)]">

@@ -56,7 +56,8 @@ export default function Tasks() {
   const startMatching = async () => {
     if (!user) return;
     const tierLevel = viewTier || 1;
-    const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
+    const completed = Number(user?.completedTasksToday || 0);
+    const tasksInThisTier = Math.max(0, Math.min(20, completed - (tierLevel - 1) * 20));
     
     if (tasksInThisTier >= 20) {
       setModalError("Daily task limit reached for this tier. Please advance to the next level or return tomorrow for a fresh cycle."); 
@@ -161,7 +162,7 @@ export default function Tasks() {
                 <div className="flex items-baseline gap-3">
                   <span className="text-2xl font-black text-[#D4AF37]">$</span>
                   <h2 className="text-5xl font-black text-white tracking-tighter drop-shadow-md">
-                    {Number(user.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {(Number(user?.balance || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </h2>
                 </div>
               </div>
@@ -187,7 +188,7 @@ export default function Tasks() {
                   <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Daily Matrix Volume</p>
                 </div>
                 <span className="text-2xl font-black text-white drop-shadow-md">
-                  {user.completedTasksToday}<span className="text-[#D4AF37]/40 text-sm ml-1">/ 60</span>
+                  {user?.completedTasksToday || 0}<span className="text-[#D4AF37]/40 text-sm ml-1">/ 60</span>
                 </span>
               </div>
             </div>
@@ -207,33 +208,36 @@ export default function Tasks() {
                 <Sparkles size={120} className="text-[#D4AF37]" />
               </div>
               
-              {(() => {
-                const tierLevel = viewTier || 1;
-                const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
-                return (
-                  <>
-                    <div className="flex items-center justify-between relative z-10">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Operational Load Level</p>
-                        <h3 className="text-3xl font-black text-white mt-2 drop-shadow-md">
-                          V{tierLevel} <span className="text-[#D4AF37]/20 mx-1">/</span> {tasksInThisTier}<span className="text-[#D4AF37]/40 text-lg">/20</span>
-                        </h3>
+                {(() => {
+                  const tierLevel = viewTier || 1;
+                  const completed = Number(user?.completedTasksToday || 0);
+                  const tasksInThisTier = Math.max(0, Math.min(20, completed - (tierLevel - 1) * 20));
+                  const progressWidth = Math.min((tasksInThisTier / 20) * 100, 100) || 0;
+                  
+                  return (
+                    <>
+                      <div className="flex items-center justify-between relative z-10">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Operational Load Level</p>
+                          <h3 className="text-3xl font-black text-white mt-2 drop-shadow-md">
+                            V{tierLevel} <span className="text-[#D4AF37]/20 mx-1">/</span> {tasksInThisTier}<span className="text-[#D4AF37]/40 text-lg">/20</span>
+                          </h3>
+                        </div>
+                        <div className="h-20 w-20 rounded-[30px] bg-gold-gradient flex items-center justify-center shadow-[0_15px_40px_rgba(212,175,55,0.4)]">
+                          <Crown size={36} className="text-black" />
+                        </div>
                       </div>
-                      <div className="h-20 w-20 rounded-[30px] bg-gold-gradient flex items-center justify-center shadow-[0_15px_40px_rgba(212,175,55,0.4)]">
-                        <Crown size={36} className="text-black" />
+                      <div className="h-4 rounded-full bg-white/5 overflow-hidden p-[4px] shadow-inner border border-white/5">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progressWidth}%` }}
+                          transition={{ duration: 1.5, ease: "circOut" }}
+                          className="h-full rounded-full bg-gold-gradient shadow-[0_0_20px_rgba(212,175,55,0.6)]"
+                        />
                       </div>
-                    </div>
-                    <div className="h-4 rounded-full bg-white/5 overflow-hidden p-[4px] shadow-inner border border-white/5">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${Math.min((tasksInThisTier / 20) * 100, 100)}%` }}
-                        transition={{ duration: 1.5, ease: "circOut" }}
-                        className="h-full rounded-full bg-gold-gradient shadow-[0_0_20px_rgba(212,175,55,0.6)]"
-                      />
-                    </div>
-                  </>
-                );
-              })()}
+                    </>
+                  );
+                })()}
             </div>
 
             {/* Active Matrix Order */}
@@ -268,7 +272,7 @@ export default function Tasks() {
 
                   <div className="space-y-10">
                     <div className="flex gap-6 overflow-x-auto pb-6 luxury-scrollbar px-1">
-                      {currentTask.productImage?.split('|').map((img: string, idx: number) => (
+                      {currentTask?.productImage?.split('|')?.map((img: string, idx: number) => (
                         <motion.div 
                           initial={{ opacity: 0, x: 20 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -279,7 +283,7 @@ export default function Tasks() {
                           <img src={img} alt="" className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 drop-shadow-2xl" />
                           <div className="absolute inset-0 bg-gold-gradient opacity-[0.05]" />
                         </motion.div>
-                      ))}
+                      )) || <div className="text-white/20 uppercase tracking-widest text-[10px]">No visual data available</div>}
                     </div>
 
                     <div className="space-y-6">
@@ -369,23 +373,24 @@ export default function Tasks() {
           
           <div className="space-y-6">
             {tiers.map((tier, i) => {
-              const tierVip = Number(tier.vip_level);
-              const reqBalance = Number(tier.min_access_balance) || (tierVip === 1 ? 20 : tierVip === 2 ? 399 : 799);
-              const userVip = Number(user.vipLevel || 0);
+              const tierVip = Number(tier?.vip_level || 0);
+              const reqBalance = Number(tier?.min_access_balance) || (tierVip === 1 ? 20 : tierVip === 2 ? 399 : 799);
+              const userVip = Number(user?.vipLevel || 0);
+              const completed = Number(user?.completedTasksToday || 0);
               
               // RULE: Only unlocked if user's approved VIP level matches or exceeds this tier AND balance is sufficient
               // For Tier 1, user must be at least Level 1 (approved) to enter.
-              const isUnlocked = userVip >= tierVip && user.balance >= reqBalance;
+              const isUnlocked = userVip >= tierVip && (user?.balance || 0) >= reqBalance;
               
-              const isPending = Number(user.vipLevelRequest) === tierVip && user.vipLevelRequestStatus === 'pending';
-              const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tierVip - 1) * 20));
+              const isPending = Number(user?.vipLevelRequest) === tierVip && user?.vipLevelRequestStatus === 'pending';
+              const tasksDone = Math.max(0, Math.min(20, completed - (tierVip - 1) * 20));
               const isComp = tasksDone >= 20;
               const accent = tierColors[tierVip] || "#D4AF37";
               
               // RULE: Prerequisite tasks (20 per level) must be finished before the UNLOCK button for the next level appears
               const prevLevelTasksRequired = (tierVip - 1) * 20;
-              const hasFinishedPrevLevel = tierVip === 1 || user.completedTasksToday >= prevLevelTasksRequired;
-              const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance && hasFinishedPrevLevel;
+              const hasFinishedPrevLevel = tierVip === 1 || completed >= prevLevelTasksRequired;
+              const isEligible = !isUnlocked && !isPending && (user?.balance || 0) >= reqBalance && hasFinishedPrevLevel;
 
               return (
                 <motion.div

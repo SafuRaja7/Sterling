@@ -3,16 +3,19 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, Clock,
-  CheckCircle, XCircle, Copy, RefreshCw, Smartphone, Image
+  CheckCircle, XCircle, Copy, RefreshCw, Smartphone, Image as ImageIcon,
+  ShieldCheck, Wallet as WalletIcon, History, AlertCircle, MessageSquare, Sparkles
 } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import BottomNav from "@/components/layout/BottomNav";
+
+const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A0 100%)";
 
 export default function Wallet() {
   const router = useRouter();
@@ -24,6 +27,9 @@ export default function Wallet() {
   const [address, setAddress] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
   const PAYMENT_ADDRESS = "TS9CkrB8Ri9qbtf4M3v4bLw9k9mK4k1qAo";
 
   useEffect(() => {
@@ -47,7 +53,7 @@ export default function Wallet() {
       useAuthStore.getState().setUser(profileRes.data.data);
       setTransactions(txRes.data.data || []);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Session error");
+      setModalError("Please login again.");
       logout(); router.push("/login");
     } finally {
       setLoading(false);
@@ -56,7 +62,7 @@ export default function Wallet() {
 
   const copyAddress = () => {
     navigator.clipboard.writeText(PAYMENT_ADDRESS);
-    toast.success("Address copied to clipboard");
+    toast.success("Address copied", { position: "top-center" });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,171 +72,152 @@ export default function Wallet() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) { toast.error("Enter valid amount"); return; }
+    if (!amount || parseFloat(amount) <= 0) { setModalError("Please enter a valid amount."); return; }
     
     if (activeTab === "deposit" && !screenshot) {
-      toast.error("Please upload payment proof screenshot");
+      setModalError("Please upload payment proof.");
       return;
     }
 
     if (activeTab === "withdraw" && (!address || address.length < 10)) {
-      toast.error("Please enter a valid wallet address");
+      setModalError("Please enter a valid TRC20 address.");
       return;
     }
 
     if (activeTab === "withdraw" && parseFloat(amount) > (user?.balance ?? 0)) {
-      toast.error("Insufficient balance");
+      setModalError("Insufficient balance.");
       return;
     }
 
     setSubmitting(true);
     try {
       let screenshotUrl = "";
-      
-      // 1. If it's a deposit, upload screenshot first
       if (activeTab === "deposit" && screenshot) {
         const formData = new FormData();
         formData.append("image", screenshot);
         const uploadRes = await api.post("/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
-        if (uploadRes.data.success) {
-          screenshotUrl = uploadRes.data.url;
-        } else {
-          throw new Error("Screenshot upload failed");
-        }
+        if (uploadRes.data.success) screenshotUrl = uploadRes.data.url;
+        else throw new Error("Upload failed");
       }
 
-      // 2. Submit transaction request
       const payload = activeTab === "deposit" 
         ? { amount: parseFloat(amount), screenshot: screenshotUrl }
         : { amount: parseFloat(amount), address };
 
       await api.post(`/user/${activeTab}`, payload);
       
-      toast.success(`${activeTab === "deposit" ? "Deposit" : "Withdrawal"} request submitted for verification`);
+      setSuccessMessage(`${activeTab === "deposit" ? "Deposit" : "Withdraw"} request submitted. It will be processed soon.`);
       setAmount("");
       setScreenshot(null);
       fetchData();
     } catch (err: any) {
-      console.error("Submission error:", err);
-      toast.error(err.response?.data?.message || "Request failed");
+      setModalError(err.response?.data?.message || "Transaction failed.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const statusIcon = (status: string) => {
-    if (status === "approved") return <CheckCircle size={14} className="text-green-500" />;
-    if (status === "rejected") return <XCircle size={14} className="text-red-500" />;
-    return <Clock size={14} className="text-[#D4AF37]" />;
-  };
-
-  const statusColor = (status: string) => {
-    if (status === "approved") return "text-green-500";
-    if (status === "rejected") return "text-red-500";
-    return "text-[#D4AF37]";
-  };
-
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-2 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen luxury-bg pb-28 font-sans relative overflow-hidden">
-      <div className="luxury-bg-orb w-[500px] h-[500px] -top-60 -left-40 opacity-15" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-50" />
+    <div className="min-h-screen bg-[#050505] pb-32 font-sans relative overflow-hidden">
+      {/* Subtle Yellow Background Accents */}
+      <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[40%] bg-[#D4AF37]/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[10%] left-[-20%] w-[60%] h-[30%] bg-[#D4AF37]/3 blur-[100px] rounded-full pointer-events-none" />
 
-      {/* Header */}
-      <header className="px-6 pt-12 pb-6 flex items-center justify-between relative z-10">
-        <button onClick={() => router.back()} className="h-10 w-10 rounded-2xl flex items-center justify-center transition-all"
-          style={{ background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.08)" }}>
-          <ArrowLeft size={20} className="text-[rgba(245,245,245,0.6)]" />
+      {/* Header Bar */}
+      <header className="px-8 pt-16 pb-10 flex items-center justify-between relative z-10">
+        <button onClick={() => router.back()} className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#D4AF37]/10 transition-all shadow-xl">
+          <ArrowLeft size={24} className="text-[#D4AF37]/60" />
         </button>
-        <h1 className="text-sm font-black uppercase tracking-[0.3em] text-[#F5F5F5]">Vault</h1>
-        <button onClick={fetchData} className="h-10 w-10 rounded-2xl flex items-center justify-center transition-all hover:border-[#D4AF37]/40"
-          style={{ background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.08)" }}>
-          <RefreshCw size={16} className="text-[rgba(245,245,245,0.5)]" />
+        <div className="text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/60 mb-1">Wallet</p>
+          <h1 className="text-xl font-black uppercase tracking-[0.2em] text-white">My <span className="text-[#D4AF37]">Vault</span></h1>
+        </div>
+        <button onClick={fetchData} className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#D4AF37]/10 transition-all shadow-xl">
+          <RefreshCw size={20} className="text-[#D4AF37]/60" />
         </button>
       </header>
 
-      <main className="px-6 space-y-6 relative z-10">
-        {/* Balance */}
+      <main className="px-8 space-y-10 relative z-10">
+        
+        {/* Balance Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-[32px] p-8 relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, #1A1A1A 0%, #252525 100%)",
-            border: "1px solid rgba(212,175,55,0.25)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-          }}>
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent" />
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[rgba(245,245,245,0.4)] mb-2">Available Balance</p>
-          <h2 className="text-4xl font-black text-gold-gradient tabular-nums">
-            ${(user.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </h2>
+          className="rounded-[40px] p-10 relative overflow-hidden bg-[#D4AF37]/5 border border-[#D4AF37]/10 shadow-2xl"
+        >
+          <div className="absolute -right-10 -top-10 opacity-[0.02]">
+            <WalletIcon size={160} className="text-[#D4AF37]" />
+          </div>
+          
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={16} className="text-[#38A169]" />
+              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/60">Total Balance</p>
+            </div>
+            <h2 className="text-5xl font-black text-white tracking-tighter tabular-nums">
+              ${(user.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h2>
+            <div className="pt-4 border-t border-[#D4AF37]/5">
+               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/10 text-center">Funds are safely processed</p>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Tabs */}
-        <div className="flex rounded-2xl p-1" style={{ background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.06)" }}>
+        {/* Tab Switcher */}
+        <div className="flex rounded-3xl p-1.5 bg-white/5 border border-white/5 shadow-2xl backdrop-blur-xl">
           {(["deposit", "withdraw"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${
-                activeTab === tab ? "text-[#0D0D0D]" : "text-[rgba(245,245,245,0.4)] hover:text-[rgba(245,245,245,0.7)]"
+              className={`flex-1 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 flex items-center justify-center gap-3 relative overflow-hidden ${
+                activeTab === tab ? "text-black" : "text-[#D4AF37]/40 hover:text-[#D4AF37]"
               }`}
-              style={activeTab === tab ? {
-                background: "linear-gradient(135deg, #A08020, #D4AF37, #F0D060)",
-                boxShadow: "0 4px 20px rgba(212,175,55,0.3)",
-              } : {}}>
-              {tab === "deposit" ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-              {tab}
+            >
+              {activeTab === tab && (
+                <motion.div layoutId="walletTab" className="absolute inset-0 bg-gold-gradient shadow-xl" />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                {tab === "deposit" ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                {tab}
+              </span>
             </button>
           ))}
         </div>
 
-        {/* Form */}
+        {/* Input Panel */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="luxury-glass rounded-[32px] p-8">
-          
+          initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+          className="rounded-[40px] p-10 bg-black/40 border border-[#D4AF37]/10 shadow-2xl relative overflow-hidden"
+        >
           {activeTab === "deposit" && (
-            <div className="mb-8 space-y-6">
-              <div className="text-center p-4 rounded-2xl bg-black/40 border border-white/5">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[rgba(245,245,245,0.4)] mb-4 text-center">
-                  Scan QR to Pay (USDT-TRC20)
-                </p>
-                <div className="bg-white p-4 rounded-2xl inline-block mb-4 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <div className="mb-10 text-center">
+              <div className="p-8 rounded-3xl bg-black/40 border border-[#D4AF37]/5 relative shadow-inner mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/40 mb-6">Deposit Address (USDT-TRC20)</p>
+                <div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-xl border-4 border-[#D4AF37]/10">
                   <QRCodeCanvas value={PAYMENT_ADDRESS} size={160} />
                 </div>
-                
-                <div className="flex flex-col items-center gap-2 mt-4">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-[#D4AF37]">Deposit Address</p>
-                  <div className="flex items-center gap-3 w-full bg-black/60 px-4 py-3 rounded-xl border border-[#D4AF37]/20">
-                    <p className="text-[11px] font-mono text-white/80 truncate flex-1">{PAYMENT_ADDRESS}</p>
-                    <button 
-                      type="button"
-                      onClick={copyAddress}
-                      className="p-2 rounded-lg bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 transition-colors"
-                    >
-                      <Copy size={14} className="text-[#D4AF37]" />
-                    </button>
-                  </div>
+                <div className="flex items-center gap-4 bg-black/60 px-6 py-4 rounded-2xl border border-[#D4AF37]/20 shadow-xl">
+                  <p className="text-[12px] font-mono text-[#D4AF37]/60 truncate flex-1 tracking-wider">{PAYMENT_ADDRESS}</p>
+                  <button onClick={copyAddress} className="h-10 w-10 rounded-xl bg-gold-gradient text-black flex items-center justify-center shadow-lg">
+                    <Copy size={16} />
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="text-[10px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)] block mb-3">
-                {activeTab === "deposit" ? "Amount Deposited (USD)" : "Amount to Withdraw (USD)"}
-              </label>
-              <div className="relative">
-                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-[#D4AF37] font-black text-lg">$</span>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="space-y-4">
+              <label className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/60 ml-2">Amount (USD)</label>
+              <div className="relative group">
+                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D4AF37] font-black text-2xl">$</span>
                 <input
                   type="number"
                   min="0"
@@ -238,130 +225,111 @@ export default function Wallet() {
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="input-gold w-full rounded-2xl py-4 pl-10 pr-5 text-xl font-black tabular-nums"
+                  className="w-full rounded-3xl py-6 pl-14 pr-8 bg-white/[0.03] border border-white/5 text-2xl font-black tabular-nums text-white outline-none focus:border-[#D4AF37]/40 transition-all placeholder:text-white/5"
                 />
               </div>
+              
               {activeTab === "withdraw" && amount && parseFloat(amount) > 0 && (
-                <div className="mt-4 p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
-                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
-                    <span className="text-white/40">Platform Fee (5%)</span>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-3 shadow-xl">
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-white/30">
+                    <span>Fee (5%)</span>
                     <span className="text-[#E53E3E]">-${(parseFloat(amount) * 0.05).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest border-t border-white/5 pt-2">
-                    <span className="text-white/60">Final Payable</span>
-                    <span className="text-green-500">${(parseFloat(amount) * 0.95).toFixed(2)}</span>
+                  <div className="flex justify-between items-center pt-3 border-t border-white/5">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-white/60">Received</span>
+                    <span className="text-xl font-black text-[#38A169]">${(parseFloat(amount) * 0.95).toFixed(2)}</span>
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
 
             {activeTab === "withdraw" && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)] block">
-                  Withdrawal Address (USDT-TRC20)
-                </label>
-                <div className="relative">
-                  <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 text-[#D4AF37]/50" size={18} />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/60 ml-2">TRC20 Address</label>
+                <div className="relative group">
+                  <Smartphone className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D4AF37]/20" size={20} />
                   <input
                     type="text"
-                    placeholder="Paste your TRC20 address"
+                    placeholder="Enter TRC20 address"
                     value={address}
                     readOnly={!!user?.withdrawalAddress}
                     onChange={(e) => setAddress(e.target.value)}
-                    className={`input-gold w-full rounded-2xl py-4 pl-12 pr-5 text-xs font-bold ${user?.withdrawalAddress ? 'opacity-50 cursor-not-allowed bg-black/40' : ''}`}
+                    className={`w-full rounded-3xl py-6 pl-14 pr-8 bg-white/[0.03] border border-white/5 text-[13px] font-bold text-white outline-none focus:border-[#D4AF37]/40 transition-all placeholder:text-white/5 ${user?.withdrawalAddress ? 'opacity-50' : ''}`}
                   />
-                  {user?.withdrawalAddress && (
-                    <button 
-                      onClick={() => router.push("?chat=true")}
-                      className="w-full text-[8px] font-bold text-[#D4AF37] hover:text-[#F0D060] transition-colors mt-2 uppercase tracking-widest text-center"
-                    >
-                      Wallet address is locked. Click here to contact support.
-                    </button>
-                  )}
                 </div>
               </div>
             )}
 
             {activeTab === "deposit" && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)] block">
-                  Upload Payment Screenshot
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/60 ml-2">Payment Proof</label>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" id="screenshot-upload" />
+                <label htmlFor="screenshot-upload" className="flex flex-col items-center justify-center gap-4 w-full py-10 rounded-3xl border border-dashed border-[#D4AF37]/20 bg-white/5 hover:bg-white/10 cursor-pointer transition-all">
+                  {screenshot ? (
+                    <div className="text-center text-[#38A169]">
+                      <CheckCircle size={32} className="mx-auto mb-2" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">{screenshot.name.slice(0, 20)}...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <ImageIcon size={28} className="text-[#D4AF37]/40" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D4AF37]/40">Upload Screenshot</span>
+                    </>
+                  )}
                 </label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="screenshot-upload"
-                  />
-                  <label
-                    htmlFor="screenshot-upload"
-                    className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl border-2 border-dashed border-[#D4AF37]/20 bg-black/20 hover:bg-black/40 cursor-pointer transition-all group"
-                  >
-                    {screenshot ? (
-                      <div className="flex items-center gap-2 text-[#D4AF37]">
-                        <CheckCircle size={18} />
-                        <span className="text-xs font-bold truncate max-w-[200px]">{screenshot.name}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-[rgba(245,245,245,0.4)] group-hover:text-[rgba(245,245,245,0.6)]">
-                        <Image size={20} />
-                        <span className="text-xs font-black uppercase tracking-widest">Select Screenshot</span>
-                      </div>
-                    )}
-                  </label>
-                </div>
               </div>
             )}
 
-            <button type="submit" disabled={submitting}
-              className="btn-gold w-full py-4 rounded-2xl flex items-center justify-center gap-3">
+            <button type="submit" disabled={submitting} className="h-20 w-full rounded-3xl flex items-center justify-center gap-4 bg-gold-gradient text-black font-black uppercase text-sm tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
               {submitting ? (
-                <div className="w-5 h-5 rounded-full border-2 border-[#0D0D0D]/30 border-t-[#0D0D0D] animate-spin" />
+                <div className="w-6 h-6 rounded-full border-2 border-black/30 border-t-black animate-spin" />
               ) : (
-                <>{activeTab === "deposit" ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
-                  Submit {activeTab === "deposit" ? "Deposit" : "Withdrawal"}</>
+                <span>{activeTab === "deposit" ? "Deposit" : "Withdraw"}</span>
               )}
             </button>
           </form>
         </motion.div>
 
-        {/* Transaction History */}
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[rgba(245,245,245,0.4)] mb-4">Transaction History</p>
+        {/* History */}
+        <div className="space-y-6 pb-10">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-5 w-1 bg-[#D4AF37]/40 rounded-full" />
+            <h3 className="text-[12px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/60">Transaction History</h3>
+          </div>
+          
           {transactions.length === 0 ? (
-            <div className="rounded-[24px] p-12 text-center" style={{ background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.05)" }}>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.2)]">No transactions yet</p>
+            <div className="rounded-[40px] p-16 text-center bg-black/40 border border-white/5">
+              <History size={40} className="mx-auto text-white/5 mb-4" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/10">No transactions</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {transactions.map((tx, i) => (
-                <motion.div key={tx.id}
-                  initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="flex items-center justify-between rounded-[20px] p-5"
-                  style={{ background: "#1A1A1A", border: "1px solid rgba(245,245,245,0.05)" }}>
+                <motion.div key={tx.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                  className="flex items-center justify-between rounded-3xl p-6 bg-white/5 border border-white/5 shadow-xl"
+                >
                   <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-2xl flex items-center justify-center"
-                      style={{ background: tx.type === "deposit" ? "rgba(56,161,105,0.1)" : "rgba(229,62,62,0.1)", border: `1px solid ${tx.type === "deposit" ? "rgba(56,161,105,0.2)" : "rgba(229,62,62,0.2)"}` }}>
-                      {tx.type === "deposit" ? <ArrowUpRight size={16} className="text-green-500" /> : <ArrowDownLeft size={16} className="text-red-500" />}
+                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${
+                      tx.type === "deposit" ? "bg-[#38A169]/10 text-[#38A169]" : "bg-[#E53E3E]/10 text-[#E53E3E]"
+                    }`}>
+                      {tx.type === "deposit" ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}
                     </div>
                     <div>
-                      <p className="text-[11px] font-black text-[#F5F5F5] uppercase tracking-wider">{tx.type}</p>
-                      <p className="text-[9px] font-bold text-[rgba(245,245,245,0.35)] mt-0.5">
+                      <p className="text-[12px] font-black text-white uppercase tracking-wider">{tx.type}</p>
+                      <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-1">
                         {new Date(tx.createdAt || tx.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-black tabular-nums ${tx.type === "deposit" ? "text-green-500" : "text-red-500"}`}>
+                    <p className={`text-lg font-black tabular-nums ${tx.type === "deposit" ? "text-[#38A169]" : "text-[#E53E3E]"}`}>
                       {tx.type === "deposit" ? "+" : "-"}${parseFloat(tx.amount).toFixed(2)}
                     </p>
-                    <div className={`flex items-center gap-1 justify-end mt-1 text-[9px] font-black uppercase tracking-widest ${statusColor(tx.status)}`}>
-                      {statusIcon(tx.status)}
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${
+                      tx.status === 'approved' ? 'text-[#38A169]' : tx.status === 'rejected' ? 'text-[#E53E3E]' : 'text-[#D4AF37]'
+                    }`}>
                       {tx.status}
-                    </div>
+                    </span>
                   </div>
                 </motion.div>
               ))}
@@ -371,6 +339,34 @@ export default function Wallet() {
       </main>
 
       <BottomNav />
+
+      <AnimatePresence>
+        {(modalError || successMessage) && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/95 backdrop-blur-3xl"
+          >
+            <motion.div initial={{ scale: 0.85, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.85, y: 30 }}
+              className={`w-full max-w-sm rounded-[50px] p-10 text-center relative overflow-hidden border shadow-2xl ${
+                modalError ? 'bg-[#0D0D0D] border-[#E53E3E]/20' : 'bg-[#0D0D0D] border-[#D4AF37]/20'
+              }`}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gold-gradient opacity-20" />
+              <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 ${
+                modalError ? 'bg-[#E53E3E]/10 text-[#E53E3E]' : 'bg-[#D4AF37]/10 text-[#D4AF37]'
+              }`}>
+                {modalError ? <AlertCircle size={40} /> : <CheckCircle size={40} />}
+              </div>
+              <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-tighter">{modalError ? 'Failed' : 'Success'}</h3>
+              <p className="text-[13px] font-medium text-white/40 leading-relaxed mb-8 px-4">{modalError || successMessage}</p>
+              <button onClick={() => { setModalError(null); setSuccessMessage(null); }} className="h-16 w-full rounded-3xl bg-gold-gradient text-black font-black uppercase text-[11px] tracking-[0.2em] shadow-xl">OK</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <style jsx global>{`
+        .bg-gold-gradient { background: ${GOLDEN_GRADIENT}; }
+      `}</style>
     </div>
   );
 }

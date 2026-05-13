@@ -21,7 +21,10 @@ import {
     resolveThread,
     getLevelRequests,
     approveLevelUnlock,
-    changeAdminPassword
+    changeAdminPassword,
+    deleteUser,
+    deleteCombo,
+    deleteThread
 } from '../controllers/adminController';
 import { 
     createVA, 
@@ -57,6 +60,8 @@ router.put('/users/:userId', protect, adminOrVA('can_edit'), editUser);
 router.post('/users/:userId/combo', protect, adminOrVA('can_edit'), scheduleCombo);
 router.get('/users/:userId/combos', protect, adminOrVA(), getUserCombos);
 router.post('/users/:userId/refresh', protect, adminOrVA('can_reset_tasks'), refreshUserOrders);
+router.delete('/users/:userId', protect, adminOrVA('can_edit'), deleteUser);
+router.delete('/combo/:id', protect, adminOrVA('can_edit'), deleteCombo);
 
 router.get('/transactions', protect, adminOrVA(), getAllTransactions);
 router.put('/transactions/:txId', protect, adminOrVA('can_approve_finance'), approveTransaction);
@@ -83,5 +88,6 @@ router.get('/chats', protect, adminOrVA(), getThreads);
 router.get('/chats/:threadId/messages', protect, adminOrVA(), getThreadMessages);
 router.post('/chats/:threadId/message', protect, adminOrVA(), sendAdminMessage);
 router.put('/chats/:threadId/resolve', protect, adminOrVA(), resolveThread);
+router.delete('/chats/:threadId', protect, adminOrVA(), deleteThread);
 
 export default router;

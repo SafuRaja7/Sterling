@@ -4,12 +4,19 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Lock, Crown, CheckCircle, X, ShoppingBag, ArrowLeft, Wallet, TrendingUp, MessageSquare, AlertCircle } from "lucide-react";
+import { 
+  Zap, Lock, Crown, CheckCircle, X, 
+  ShoppingBag, ArrowLeft, Wallet, TrendingUp, 
+  MessageSquare, AlertCircle, Sparkles, ShoppingCart,
+  ArrowRight, ShieldCheck, Clock
+} from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import BottomNav from "@/components/layout/BottomNav";
 import confetti from "canvas-confetti";
+
+const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A0 100%)";
 
 export default function Tasks() {
   const router = useRouter();
@@ -21,6 +28,8 @@ export default function Tasks() {
   const [submitting, setSubmitting] = useState(false);
   const [view, setView] = useState<'rooms' | 'engine'>('rooms');
   const [viewTier, setViewTier] = useState<number | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) { router.push("/login"); return; }
@@ -46,25 +55,22 @@ export default function Tasks() {
 
   const startMatching = async () => {
     if (!user) return;
-
     const tierLevel = viewTier || 1;
     const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
     
     if (tasksInThisTier >= 20) {
-      toast.error("Daily task limit reached for this level. Move to next level or wait for reset."); 
+      setModalError("Daily task limit reached for this tier. Please advance to the next level or return tomorrow for a fresh cycle."); 
       return;
     }
     
-    if (user.completedTasksToday >= 60) {
-      toast.error("You have completed all your levels. Thank you, come back tomorrow!");
-      return;
-    }
     setMatching(true);
+    await new Promise(r => setTimeout(r, 1500));
+    
     try {
       const { data } = await api.post("/user/task/generate");
       if (data.success) setCurrentTask(data.data);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "No tasks available");
+      setModalError(err.response?.data?.message || "No high-yield opportunities available at this moment.");
     } finally { setMatching(false); }
   };
 
@@ -77,16 +83,16 @@ export default function Tasks() {
         confetti({
           particleCount: 150,
           spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#D4AF37', '#F0D060', '#FFFFFF', '#0D0D0D']
+          origin: { y: 0.5 },
+          colors: ['#D4AF37', '#F5E0A0', '#FFFFFF']
         });
-        toast.success(`+$${data.data.completedTask.commission.toFixed(2)} earned!`);
+        setSuccessMessage(`Operation successful. +$${data.data.completedTask.commission.toFixed(2)} has been credited to your institutional vault.`);
         setCurrentTask(null);
         const profileRes = await api.get("/user/profile");
         useAuthStore.getState().setUser(profileRes.data.data);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed");
+      setModalError(err.response?.data?.message || "Transaction synchronization failed.");
     } finally { setSubmitting(false); }
   };
 
@@ -94,120 +100,135 @@ export default function Tasks() {
     try {
       const { data } = await api.post("/user/request-level-unlock", { level });
       if (data.success) {
-        toast.success("Request submitted! Please contact customer support to unlock this level.", { duration: 5000 });
-        fetchTiers(); // Refresh profile to show pending status
+        setSuccessMessage("Level upgrade request initiated. Please verify with Support to activate your new high-yield terminal.");
+        fetchTiers();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to submit request");
+      setModalError(err.response?.data?.message || "Verification request failed.");
     }
   };
 
-
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-2 border-[#D4AF37]/10 border-t-[#D4AF37] animate-spin shadow-[0_0_20px_rgba(212,175,55,0.2)]" />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen luxury-bg pb-28 font-sans relative overflow-hidden">
-      <div className="luxury-bg-orb w-[500px] h-[500px] -top-40 -right-40 opacity-20" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-50" />
+  const tierColors: Record<number, string> = { 1: "#3b82f6", 2: "#8b5cf6", 3: "#f97316" };
 
-      <header className="px-6 pt-12 pb-6 relative z-10">
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[rgba(245,245,245,0.4)] mb-1">Daily Operations</p>
-        <h1 className="text-3xl font-black tracking-tighter text-[#F5F5F5]">
-          Task <span className="text-gold-gradient">Engine</span>
-        </h1>
+  return (
+    <div className="min-h-screen bg-[#050505] pb-28 font-sans relative overflow-hidden selection:bg-[#D4AF37]/30">
+      {/* Enhanced Yellow Background Orbs */}
+      <div className="absolute top-[-10%] right-[-10%] w-[100%] h-[50%] bg-[#D4AF37]/10 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[80%] h-[40%] bg-[#D4AF37]/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-[30%] left-[50%] -translate-x-1/2 w-full h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent opacity-50" />
+
+      <header className="px-8 pt-16 pb-12 relative z-10 flex items-end justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-5 w-1.5 bg-gold-gradient rounded-full shadow-[0_0_10px_#D4AF37]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Tactical Operational Unit</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight text-white uppercase drop-shadow-lg">
+            Order <span className="text-gold-gradient">Matrix</span>
+          </h1>
+        </div>
+        <div className="h-16 w-16 rounded-3xl bg-black/40 border border-[#D4AF37]/20 flex items-center justify-center shadow-2xl backdrop-blur-xl relative group">
+           <div className="absolute inset-0 bg-gold-gradient opacity-10 group-hover:opacity-20 transition-opacity" />
+           <Sparkles size={28} className="text-[#D4AF37] drop-shadow-[0_0_10px_#D4AF37]" />
+        </div>
       </header>
 
-      <main className="px-6 space-y-6 relative z-10">
-        {/* Premium Earnings Container */}
-        <motion.div
+      <main className="px-8 space-y-10 relative z-10">
+        
+        {/* Elite Stats Container - Saturated with Yellow */}
+        <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="luxury-glass rounded-[32px] p-6 relative overflow-hidden group"
-          style={{ 
-            background: "linear-gradient(145deg, rgba(26,26,26,0.9), rgba(13,13,13,0.95))",
-            border: "1px solid rgba(212,175,55,0.15)",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.4)"
-          }}
+          className="rounded-[45px] p-10 relative overflow-hidden group shadow-2xl"
+          style={{ background: "rgba(212, 175, 55, 0.05)", border: "1.5px solid rgba(212, 175, 55, 0.2)", backdropFilter: "blur(30px)" }}
         >
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-            <TrendingUp size={80} className="text-[#D4AF37]" />
+          <div className="absolute -right-10 -top-10 opacity-[0.05] group-hover:scale-110 transition-transform duration-1000">
+            <TrendingUp size={160} className="text-[#D4AF37]" />
           </div>
-
-          <div className="flex flex-col gap-6 relative z-10">
-            {/* Total Balance */}
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          
+          <div className="flex flex-col gap-10 relative z-10">
+            <div className="flex items-center justify-between border-b border-[#D4AF37]/10 pb-8">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D4AF37] mb-1">Total Balance</p>
-                <h2 className="text-3xl font-black text-[#F5F5F5] tracking-tighter">
-                  ${Number(user.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/40 mb-3">Institutional Vault Balance</p>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-2xl font-black text-[#D4AF37]">$</span>
+                  <h2 className="text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                    {Number(user.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </h2>
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center border border-[#D4AF37]/20">
-                <Wallet size={24} className="text-[#D4AF37]" />
+              <div className="h-16 w-16 rounded-3xl bg-gold-gradient flex items-center justify-center shadow-[0_12px_35px_rgba(212,175,55,0.4)] relative">
+                <div className="absolute inset-0 bg-white opacity-20" />
+                <Wallet size={30} className="text-black relative z-10" />
               </div>
             </div>
 
-            {/* Earnings Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-[#D4AF37]/30 transition-colors">
-                <p className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Today's Earning</p>
-                <p className="text-lg font-black text-[#38A169]">
+            <div className="grid grid-cols-2 gap-10">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-2 w-2 rounded-full bg-[#38A169] shadow-[0_0_10px_#38A169]" />
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#38A169]">Cycle Earnings</p>
+                </div>
+                <span className="text-2xl font-black text-[#38A169] drop-shadow-md">
                   +${Number(user.todayEarning || 0).toFixed(2)}
-                </p>
+                </span>
               </div>
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-[#D4AF37]/30 transition-colors">
-                <p className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-1">Yesterday Earning</p>
-                <p className="text-lg font-black text-white/80">
-                  +${Number(user.yesterdayEarning || 0).toFixed(2)}
-                </p>
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-2 w-2 rounded-full bg-[#D4AF37] shadow-[0_0_10px_#D4AF37]" />
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Daily Matrix Volume</p>
+                </div>
+                <span className="text-2xl font-black text-white drop-shadow-md">
+                  {user.completedTasksToday}<span className="text-[#D4AF37]/40 text-sm ml-1">/ 60</span>
+                </span>
               </div>
             </div>
           </div>
-
-          {/* Decorative Glow */}
-          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-[#D4AF37] blur-[80px] opacity-10 pointer-events-none" />
         </motion.div>
 
         {view === 'engine' ? (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <button onClick={() => setView('rooms')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#D4AF37] transition-colors mb-2">
-              <ArrowLeft size={14} /> Back to Rooms
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8 pb-10">
+            <button onClick={() => setView('rooms')} className="h-14 px-8 rounded-2xl bg-white/5 border border-[#D4AF37]/20 flex items-center gap-4 text-[11px] font-black uppercase tracking-[0.2em] text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all shadow-xl">
+              <ArrowLeft size={18} /> Return to Rooms
             </button>
             
-            {/* Progress */}
-            <div className="rounded-[24px] p-6" style={{ background: "#1A1A1A", border: "1px solid rgba(212,175,55,0.15)", borderTop: "2px solid #D4AF37" }}>
+            {/* Progress Visualization - Yellow Accents */}
+            <div className="rounded-[45px] p-10 space-y-8 relative overflow-hidden shadow-2xl" 
+              style={{ background: "#0A0A0A", border: "1.5px solid rgba(212, 175, 55, 0.25)", backdropFilter: "blur(20px)" }}>
+              <div className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:scale-110 transition-transform">
+                <Sparkles size={120} className="text-[#D4AF37]" />
+              </div>
+              
               {(() => {
                 const tierLevel = viewTier || 1;
-                // Calculate progress for THIS specific tier
                 const tasksInThisTier = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
-                
                 return (
                   <>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between relative z-10">
                       <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.4)]">Operation Progress (VIP {tierLevel})</p>
-                        <p className="text-2xl font-black text-[#F5F5F5] mt-1">
-                          <span className="text-gold-gradient">{tasksInThisTier}</span>
-                          <span className="text-[rgba(245,245,245,0.3)] text-lg">/20</span>
-                        </p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Operational Load Level</p>
+                        <h3 className="text-3xl font-black text-white mt-2 drop-shadow-md">
+                          V{tierLevel} <span className="text-[#D4AF37]/20 mx-1">/</span> {tasksInThisTier}<span className="text-[#D4AF37]/40 text-lg">/20</span>
+                        </h3>
                       </div>
-                      <div className="h-14 w-14 rounded-full flex items-center justify-center" style={{ background: "rgba(212,175,55,0.1)", border: "2px solid rgba(212,175,55,0.3)" }}>
-                        <Crown size={24} className="text-[#D4AF37]" />
+                      <div className="h-20 w-20 rounded-[30px] bg-gold-gradient flex items-center justify-center shadow-[0_15px_40px_rgba(212,175,55,0.4)]">
+                        <Crown size={36} className="text-black" />
                       </div>
                     </div>
-                    <div className="h-2 rounded-full bg-[#252525] overflow-hidden">
+                    <div className="h-4 rounded-full bg-white/5 overflow-hidden p-[4px] shadow-inner border border-white/5">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${Math.min((tasksInThisTier / 20) * 100, 100)}%` }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className="h-full rounded-full"
-                        style={{ background: "linear-gradient(to right, #A08020, #D4AF37, #F0D060)" }}
+                        transition={{ duration: 1.5, ease: "circOut" }}
+                        className="h-full rounded-full bg-gold-gradient shadow-[0_0_20px_rgba(212,175,55,0.6)]"
                       />
                     </div>
                   </>
@@ -215,132 +236,138 @@ export default function Tasks() {
               })()}
             </div>
 
-            {/* Active Task */}
-            <AnimatePresence>
-              {currentTask && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                  className="rounded-[32px] p-6 relative"
-                  style={{ background: "#1A1A1A", border: "1px solid rgba(212,175,55,0.3)", boxShadow: "0 0 40px rgba(212,175,55,0.1)" }}>
-                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent rounded-t-[32px]" />
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Active Task</p>
-                      {currentTask.comboId && (
-                        <span className="px-2 py-0.5 rounded bg-[#E53E3E]/20 text-[#E53E3E] text-[8px] font-black uppercase tracking-widest border border-[#E53E3E]/30">Combo Order</span>
-                      )}
+            {/* Active Matrix Order */}
+            <AnimatePresence mode="wait">
+              {currentTask ? (
+                <motion.div 
+                  key="task"
+                  initial={{ opacity: 0, y: 30 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="rounded-[50px] p-10 relative overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.6)]"
+                  style={{ background: "rgba(13, 13, 13, 0.9)", border: "2px solid rgba(212, 175, 55, 0.45)", backdropFilter: "blur(40px)" }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gold-gradient shadow-[0_0_15px_rgba(212,175,55,0.3)]" />
+                  
+                  <div className="flex items-center justify-between mb-10">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-2xl bg-[#D4AF37]/10 flex items-center justify-center border border-[#D4AF37]/30 shadow-[0_5px_15px_rgba(212,175,55,0.1)]">
+                        <ShoppingCart size={28} className="text-[#D4AF37]" />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">Secure Order</p>
+                        <p className="text-[10px] font-bold text-[#D4AF37]/30 uppercase tracking-[0.2em] mt-1">Asset Verification PASSED</p>
+                      </div>
                     </div>
-                    <button onClick={() => setCurrentTask(null)} className="text-[rgba(245,245,245,0.3)] hover:text-[#F5F5F5] transition-colors"><X size={18} /></button>
+                    {currentTask.comboId && (
+                      <div className="px-5 py-2.5 rounded-xl bg-[#E53E3E]/10 border border-[#E53E3E]/40 text-[10px] font-black text-[#E53E3E] uppercase tracking-[0.3em] animate-pulse shadow-lg">
+                        Combo Boost Active
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-4 mb-6">
-                    <div className="flex gap-3 overflow-x-auto luxury-scrollbar pb-2">
+
+                  <div className="space-y-10">
+                    <div className="flex gap-6 overflow-x-auto pb-6 luxury-scrollbar px-1">
                       {currentTask.productImage?.split('|').map((img: string, idx: number) => (
-                        <div key={idx} className="h-20 w-20 rounded-2xl flex-shrink-0 overflow-hidden p-2 bg-[#252525] border border-[#D4AF37]/20 relative">
-                          <img src={img} alt="" className="w-full h-full object-contain" />
-                          {currentTask.productImage.includes('|') && (
-                            <div className="absolute top-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-[8px] font-black text-[#D4AF37] border border-[#D4AF37]/30">
-                              {idx + 1}/{currentTask.productImage.split('|').length}
-                            </div>
-                          )}
-                        </div>
+                        <motion.div 
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.1 }}
+                          key={idx} 
+                          className="h-44 w-44 rounded-[40px] flex-shrink-0 overflow-hidden p-6 bg-black/60 border border-[#D4AF37]/10 relative group shadow-2xl"
+                        >
+                          <img src={img} alt="" className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700 drop-shadow-2xl" />
+                          <div className="absolute inset-0 bg-gold-gradient opacity-[0.05]" />
+                        </motion.div>
                       ))}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-sm font-black text-[#F5F5F5] leading-snug mb-3">{currentTask.productName}</h3>
-                      <div className="flex gap-4">
+
+                    <div className="space-y-6">
+                      <h3 className="text-xl font-black text-white leading-tight uppercase tracking-tight drop-shadow-sm">{currentTask.productName}</h3>
+                      <div className="grid grid-cols-2 gap-8 p-8 rounded-[35px] bg-[#D4AF37]/5 border border-[#D4AF37]/15 shadow-inner">
                         <div>
-                          <p className="text-[8px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.35)]">Total Price</p>
-                          <p className="text-sm font-black text-[#F5F5F5]">${currentTask.price?.toFixed(2)}</p>
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/40 mb-2">Market Value</p>
+                          <p className="text-2xl font-black text-white drop-shadow-md">${currentTask.price?.toFixed(2)}</p>
                         </div>
-                        <div>
-                          <p className="text-[8px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.35)]">Total Commission</p>
-                          <p className="text-sm font-black text-[#38A169]">+${currentTask.commission?.toFixed(2)}</p>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#38A169]/40 mb-2">Your Yield</p>
+                          <p className="text-2xl font-black text-[#38A169] drop-shadow-md">+${currentTask.commission?.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
+
+                    <button onClick={submitTask} disabled={submitting} className="h-22 w-full rounded-[35px] flex items-center justify-center gap-5 bg-gold-gradient text-black font-black uppercase text-base tracking-[0.3em] shadow-[0_20px_50px_rgba(212,175,55,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-white opacity-20 group-hover:opacity-30 transition-opacity" />
+                      {submitting ? (
+                        <div className="w-8 h-8 rounded-full border-4 border-black/30 border-t-black animate-spin" />
+                      ) : (
+                        <><ShieldCheck size={28} /><span>Execute Order</span></>
+                      )}
+                    </button>
                   </div>
-                  <button onClick={submitTask} disabled={submitting} className="btn-gold w-full py-4 rounded-2xl flex items-center justify-center gap-3">
-                    {submitting ? <div className="w-5 h-5 rounded-full border-2 border-[#0D0D0D]/30 border-t-[#0D0D0D] animate-spin" /> : <><CheckCircle size={18} /><span>Complete & Earn</span></>}
-                  </button>
                 </motion.div>
+              ) : matching ? (
+                <motion.div 
+                  key="matching"
+                  initial={{ opacity: 0, scale: 0.9 }} 
+                  animate={{ opacity: 1, scale: 1 }} 
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  className="h-[450px] rounded-[50px] bg-[#0A0A0A] border border-[#D4AF37]/20 flex flex-col items-center justify-center gap-10 relative overflow-hidden shadow-2xl"
+                >
+                  <div className="absolute inset-0 bg-gold-gradient opacity-[0.05]" />
+                  <div className="relative">
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      className="w-32 h-32 rounded-full border-4 border-dashed border-[#D4AF37]/50 shadow-[0_0_30px_rgba(212,175,55,0.2)]" 
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <motion.div 
+                        animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        <Zap size={40} className="text-[#D4AF37] drop-shadow-[0_0_15px_#D4AF37]" />
+                      </motion.div>
+                    </div>
+                  </div>
+                  <div className="text-center space-y-3">
+                    <p className="text-base font-black uppercase tracking-[0.8em] text-[#D4AF37]">Scanning Matrix</p>
+                    <p className="text-[11px] font-bold text-[#D4AF37]/30 uppercase tracking-[0.4em]">Establishing high-yield link...</p>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.button 
+                  key="start"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  onClick={startMatching}
+                  className="h-32 w-full rounded-[40px] flex flex-col items-center justify-center bg-gold-gradient shadow-[0_20px_50px_rgba(212,175,55,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-white opacity-10 group-hover:opacity-20 transition-opacity" />
+                  <span className="text-black font-black uppercase tracking-[0.6em] text-lg relative z-10">Initiate Grab</span>
+                  <p className="text-[10px] font-black text-black/50 uppercase tracking-[0.3em] mt-2 group-hover:text-black/80 transition-colors relative z-10">Deploy Yield Generation Protocol</p>
+                </motion.button>
               )}
             </AnimatePresence>
-
-            {/* Start Button / Completion Message */}
-            {(() => {
-              const tierLevel = viewTier || 1;
-              const tasksDoneInThisLevel = Math.max(0, Math.min(20, user.completedTasksToday - (tierLevel - 1) * 20));
-              const isLevelCompleted = tasksDoneInThisLevel >= 20;
-
-              if (isLevelCompleted && !currentTask && !matching) {
-                return (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="w-full py-8 luxury-glass rounded-[32px] border border-[#38A169]/30 bg-[#38A169]/5 text-center"
-                  >
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#38A169]/20 text-[#38A169] mb-4">
-                      <CheckCircle size={32} />
-                    </div>
-                    <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Level {tierLevel} Completed!</h3>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] mb-6 px-4">You have finished all 20 tasks for this room.</p>
-                    <button 
-                      onClick={() => setView('rooms')}
-                      className="px-8 py-3 rounded-full bg-white/5 border border-white/10 text-white font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
-                    >
-                      Back to Rooms
-                    </button>
-                  </motion.div>
-                );
-              }
-
-              if (!currentTask) {
-                return (
-                  <button onClick={startMatching} disabled={matching}
-                    className="btn-gold w-full py-5 rounded-[24px] flex items-center justify-center gap-3 text-sm disabled:opacity-40"
-                    style={{ boxShadow: "0 8px 30px rgba(212,175,55,0.3)" }}>
-                    {matching ? <><div className="w-5 h-5 rounded-full border-2 border-[#0D0D0D]/30 border-t-[#0D0D0D] animate-spin" /><span>Matching...</span></> : <><Zap size={20} /><span>Start New Task</span></>}
-                  </button>
-                );
-              }
-              return null;
-            })()}
           </motion.div>
         ) : (
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[rgba(245,245,245,0.4)]">Available Tiers</p>
-              <div className="h-px flex-1 bg-gradient-to-r from-white/5 to-transparent ml-4" />
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 pb-10">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-3">
+                 <div className="h-6 w-1.5 bg-gold-gradient rounded-full" />
+                 <p className="text-[12px] font-black uppercase tracking-[0.6em] text-[#D4AF37]">Operational Tiers</p>
+              </div>
+              <div className="h-[1px] w-24 bg-gold-gradient opacity-30 shadow-[0_0_10px_#D4AF37]" />
             </div>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
             {tiers.map((tier, i) => {
-              const requiredBalance = tier.min_access_balance || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
-              
-              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level && user.balance >= requiredBalance;
+              const reqBalance = tier.min_access_balance || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
+              const isUnlocked = (user.vipLevel || 0) >= tier.vip_level && user.balance >= reqBalance;
               const isPending = user.vipLevelRequest === tier.vip_level && user.vipLevelRequestStatus === 'pending';
-              
-              const tasksDoneInThisLevel = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
-              const isLevelCompleted = tasksDoneInThisLevel >= 20;
-              
-              // Previous level must be fully completed (20/20) to ENTER or REQUEST next level
-              const isPreviousLevelCompleted = tier.vip_level === 1 || user.completedTasksToday >= (tier.vip_level - 1) * 20;
-              
-              // ELIGIBLE state only depends on balance as per requirements
-              const isEligible = !isUnlocked && !isPending && user.balance >= requiredBalance;
-              // LOCKED state is when balance is NOT met and not unlocked/pending
-              const isLocked = !isUnlocked && !isPending && !isEligible;
-              
-              // OPEN/ENTER state
-              const canEnter = isUnlocked && isPreviousLevelCompleted && !isLevelCompleted;
-
-              const tierColors: Record<number, string> = {
-                1: "#3b82f6", // Blue
-                2: "#8b5cf6", // Purple
-                3: "#f97316", // Orange
-              };
-              const accentColor = tierColors[tier.vip_level] || "#D4AF37";
-              const commissionRates: Record<number, number> = { 1: 4, 2: 8, 3: 12 };
-              const commission = (commissionRates[tier.vip_level] || tier.commission_rate || (tier.vip_level * 0.5 + 2.5)).toFixed(1);
+              const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tier.vip_level - 1) * 20));
+              const isComp = tasksDone >= 20;
+              const accent = tierColors[tier.vip_level] || "#D4AF37";
+              const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance;
 
               return (
                 <motion.div
@@ -348,106 +375,142 @@ export default function Tasks() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="relative overflow-hidden luxury-glass rounded-[28px] p-6 group transition-all"
+                  onClick={() => isUnlocked && !isComp && (setViewTier(tier.vip_level), setView('engine'))}
+                  className={`relative overflow-hidden rounded-[45px] p-10 border transition-all duration-500 cursor-pointer shadow-2xl ${
+                    isUnlocked ? "bg-[#D4AF37]/5 hover:bg-[#D4AF37]/10 hover:translate-x-2" : "bg-black/60 grayscale opacity-40"
+                  }`}
                   style={{ 
-                    opacity: isLocked ? 0.4 : 1,
-                    borderLeft: canEnter ? `6px solid ${accentColor}` : isLevelCompleted ? `2px solid #38A169` : isUnlocked ? `2px solid ${accentColor}` : isEligible ? `1px solid ${accentColor}` : "1px solid rgba(245,245,245,0.05)",
-                    background: canEnter ? "rgba(255,255,255,0.02)" : isEligible ? `${accentColor}05` : undefined,
-                    filter: isLocked ? 'grayscale(100%)' : 'none',
-                    boxShadow: isEligible ? `0 0 20px ${accentColor}15` : 'none'
+                    borderColor: isUnlocked ? `${accent}40` : "rgba(212,175,55,0.1)",
                   }}
                 >
-                  {/* Ribbon Badge */}
-                  <div className="absolute top-0 left-0 px-4 py-1.5 rounded-br-2xl text-[9px] font-black uppercase tracking-widest text-white shadow-xl z-20"
-                    style={{ background: isLevelCompleted ? "#38A169" : canEnter ? accentColor : isUnlocked ? `${accentColor}80` : isPending ? "#3182ce" : isEligible ? accentColor : "#252525" }}>
-                    {isLevelCompleted ? 'Completed' : canEnter ? 'Current' : isPending ? 'Pending Approval' : isUnlocked ? `VIP ${tier.vip_level}` : isEligible ? 'Eligible' : 'Locked'}
+                  <div className="absolute -right-8 -top-8 p-10 opacity-[0.04] group-hover:scale-110 transition-transform">
+                    <Crown size={120} style={{ color: accent }} />
                   </div>
 
-                  <div className="flex items-center gap-6 mt-4">
-                    <div className="relative h-20 w-20 rounded-[22px] bg-white/5 border flex items-center justify-center overflow-hidden group-hover:border-white/20 transition-all"
-                      style={{ borderColor: canEnter || isEligible ? `${accentColor}50` : "rgba(255,255,255,0.1)" }}>
-                      <img src="/images/icons/shopify.png" alt="Shopify" className="w-full h-full object-cover" 
-                        style={{ opacity: isLocked ? 0.3 : 1 }} />
-                      {isLocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><Lock size={20} className="text-white/40" /></div>}
-                    </div>
-
-                    <div className="flex-1">
-                      <h3 className={`text-lg font-black tracking-tight mb-3 ${isLocked ? "text-white/40" : "text-white"}`}>
-                        VIP {tier.vip_level} Shopify
-                      </h3>
-                      <div className="flex flex-wrap gap-3">
-                        <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
-                          style={{ background: isUnlocked || isEligible ? `${accentColor}15` : "rgba(255,255,255,0.03)", border: `1px solid ${isUnlocked || isEligible ? `${accentColor}30` : "rgba(255,255,255,0.05)"}` }}>
-                          <span style={{ color: isUnlocked || isEligible ? accentColor : "rgba(255,255,255,0.2)" }}>{commission}%</span>
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-8">
+                      <div className="h-24 w-24 rounded-[32px] bg-black/60 border border-[#D4AF37]/20 flex items-center justify-center p-5 relative shadow-xl backdrop-blur-md">
+                        <div className="absolute inset-0 bg-gold-gradient opacity-10" />
+                        <img src="/images/icons/shopify.png" alt="" className="w-full h-full object-contain relative z-10" />
+                        {!isUnlocked && <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-[32px] z-20"><Lock size={32} className="text-[#D4AF37]/40" /></div>}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-4 mb-3">
+                          <h3 className="text-2xl font-black text-white uppercase tracking-tight drop-shadow-md">Tier V{tier.vip_level}</h3>
+                          {isComp && <div className="h-6 w-6 rounded-full bg-[#38A169] flex items-center justify-center text-white shadow-lg shadow-[#38A169]/30"><CheckCircle size={16} /></div>}
                         </div>
-                        <div className="inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest gap-2"
-                          style={{ background: "rgba(212,175,55,0.05)", border: "1px solid rgba(212,175,55,0.15)" }}>
-                          <span className={!isLocked ? "text-gold-gradient" : "text-white/30"}>
-                            ${requiredBalance.toLocaleString()} USDT +
-                          </span>
+                        <div className="flex gap-4">
+                          <div className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-white/40 uppercase tracking-widest">
+                            Yield: <span style={{ color: accent }}>{(tier.vip_level * 0.5 + 2.5).toFixed(1)}%</span>
+                          </div>
+                          <div className="px-4 py-1.5 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[10px] font-black text-[#D4AF37] uppercase tracking-widest shadow-lg">
+                            Threshold: ${reqBalance}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {isLevelCompleted ? (
-                      <div className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#38A169]/20 text-[#38A169] border border-[#38A169]/30">
-                        Completed
-                      </div>
-                    ) : isPending ? (
-                      <button onClick={() => router.push("?chat=true")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[8px] uppercase tracking-widest bg-white/5 border border-white/10 text-white/40 hover:text-[#D4AF37] hover:border-[#D4AF37]/30 transition-all flex-col">
-                        <MessageSquare size={10} className="mb-1" />
-                        <span>Contact Support</span>
-                      </button>
-                    ) : isUnlocked ? (
-                        <button onClick={() => { setViewTier(tier.vip_level); setView('engine'); }} className="h-10 px-6 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0D0D0D] transition-colors shadow-[0_0_15px_rgba(212,175,55,0.3)]">
-                          Open
+                    <div className="flex flex-col items-end gap-3">
+                      {isComp ? (
+                        <div className="h-14 w-14 rounded-2xl bg-[#38A169]/10 flex items-center justify-center text-[#38A169] border border-[#38A169]/30 shadow-xl">
+                          <CheckCircle size={28} />
+                        </div>
+                      ) : isUnlocked ? (
+                        <div className="h-14 px-8 rounded-2xl bg-gold-gradient text-black flex items-center justify-center font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl shadow-[#D4AF37]/30">
+                          Activate
+                        </div>
+                      ) : isPending ? (
+                        <div className="h-14 w-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/30 shadow-xl">
+                          <Clock size={28} />
+                        </div>
+                      ) : isEligible ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleRequestUnlock(tier.vip_level); }}
+                          className="h-14 px-8 rounded-2xl bg-gold-gradient text-black flex items-center justify-center font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl shadow-[#D4AF37]/30"
+                        >
+                          Unlock
                         </button>
-                    ) : isPending ? (
-                        <button onClick={() => router.push("?chat=true")} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#3182CE] text-white hover:bg-[#2B6CB0] transition-colors shadow-[0_4px_15px_rgba(49,130,206,0.3)]">
-                          Contact Support
-                        </button>
-                    ) : isEligible ? (
-                      <button onClick={() => handleRequestUnlock(tier.vip_level)} className="h-10 px-4 rounded-full flex items-center justify-center font-black text-[10px] uppercase tracking-widest bg-[#D4AF37] text-[#0D0D0D] hover:bg-[#F0D060] transition-colors shadow-[0_4px_15px_rgba(212,175,55,0.4)]">
-                        Unlock
-                      </button>
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
-                        <Lock size={16} className="text-white/20" />
-                      </div>
-                    )}
+                      ) : (
+                        <div className="h-14 w-14 rounded-2xl bg-white/5 flex items-center justify-center text-white/20 border border-white/10 shadow-xl">
+                          <Lock size={28} />
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Sequential Error Hint (only if Eligible but previous not complete) */}
-                  {isEligible && !isPreviousLevelCompleted && (
-                    <p className="text-[8px] font-bold text-[#E53E3E] uppercase mt-4 tracking-widest flex items-center gap-1.5">
-                      <AlertCircle size={10} /> Please complete Level {tier.vip_level - 1} tasks first
-                    </p>
-                  )}
                 </motion.div>
               );
             })}
-
-            {/* Final Completion Message */}
-            {user.completedTasksToday >= 60 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="mt-8 p-8 rounded-[32px] text-center border border-[#38A169]/30"
-                style={{ background: "linear-gradient(145deg, rgba(56,161,105,0.1), rgba(0,0,0,0.4))" }}
-              >
-                <CheckCircle size={40} className="mx-auto text-[#38A169] mb-4" />
-                <h3 className="text-xl font-black text-[#F5F5F5] mb-2">Operation Complete</h3>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-relaxed">
-                  You have completed all your levels.<br />
-                  Thank you, come back tomorrow!
-                </p>
-              </motion.div>
-            )}
           </div>
         </motion.div>
         )}
       </main>
+
       <BottomNav />
+
+      {/* Global Center-Screen Premium Modals */}
+      <AnimatePresence>
+        {(modalError || successMessage) && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/98 backdrop-blur-3xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.85, y: 30 }} 
+              animate={{ scale: 1, y: 0 }} 
+              exit={{ scale: 0.85, y: 30 }}
+              className={`w-full max-w-sm rounded-[60px] p-12 text-center relative overflow-hidden border shadow-[0_40px_100px_rgba(0,0,0,0.8)] ${
+                modalError ? 'bg-[#0D0D0D] border-[#E53E3E]/30' : 'bg-[#0D0D0D] border-[#D4AF37]/30'
+              }`}
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gold-gradient opacity-40 shadow-[0_0_20px_#D4AF37]" />
+              
+              <div className={`w-28 h-28 rounded-[40px] flex items-center justify-center mx-auto mb-10 border shadow-2xl ${
+                modalError ? 'bg-[#E53E3E]/10 border-[#E53E3E]/30 text-[#E53E3E]' : 'bg-[#D4AF37]/10 border-[#D4AF37]/30 text-[#D4AF37]'
+              }`}>
+                {modalError ? <AlertCircle size={56} /> : <CheckCircle size={56} />}
+              </div>
+
+              <h3 className="text-3xl font-black text-white mb-6 uppercase tracking-tighter drop-shadow-md">
+                {modalError ? 'System Protocol Error' : 'Transaction Success'}
+              </h3>
+              <p className="text-[14px] font-medium text-white/40 leading-relaxed mb-12 px-6 uppercase tracking-wide">
+                {modalError || successMessage}
+              </p>
+
+              <div className="flex flex-col gap-5">
+                {modalError?.toLowerCase().includes("balance") && (
+                  <button 
+                    onClick={() => { setModalError(null); router.push("?chat=true"); }}
+                    className="h-18 w-full rounded-[25px] bg-gold-gradient text-black font-black uppercase text-[12px] tracking-[0.3em] shadow-[0_15px_40px_rgba(212,175,55,0.4)] flex items-center justify-center gap-4 active:scale-95 transition-all"
+                  >
+                    <MessageSquare size={20} />
+                    Consult Support
+                  </button>
+                )}
+                <button 
+                  onClick={() => { setModalError(null); setSuccessMessage(null); }}
+                  className="h-18 w-full rounded-[25px] bg-white/5 border border-white/10 text-white font-black uppercase text-[12px] tracking-[0.3em] hover:bg-white/10 transition-all active:scale-95"
+                >
+                  Dismiss Protocol
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <style jsx global>{`
+        .bg-gold-gradient { background: ${GOLDEN_GRADIENT}; }
+        .luxury-scrollbar::-webkit-scrollbar { height: 4px; }
+        .luxury-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .luxury-scrollbar::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.4); border-radius: 10px; }
+      `}</style>
     </div>
   );
+}
+
+function LayoutDashboard(props: any) {
+  return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>;
 }

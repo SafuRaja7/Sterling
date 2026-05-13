@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { supabase } from '../config/db';
+import { supabase, supabaseAdmin } from '../config/db';
 import { calculateProgressiveCommission } from '../utils/progressiveCommission';
 
 const mapTaskToCamelCase = (task: any) => {
@@ -28,8 +28,8 @@ const getUTCMidnight = (date: Date) =>
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
-    const user = req.user; // Use the already corrected user from middleware
-
+    const user = req.user; 
+    console.log(`--- FETCHING PROFILE FOR: ${user.username} (ID: ${userId}) ---`);
     // Fetch pending task if any
     let pendingTask: any = null;
     if (user.pending_task) {
@@ -159,19 +159,9 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Daily reset expiry check (redundant safety net)
-    const now = new Date();
-    const todayUTC = getUTCMidnight(now);
-    const lastReset = user.last_task_reset ? new Date(user.last_task_reset) : new Date(0);
-    const lastResetUTC = getUTCMidnight(lastReset);
 
-    if (todayUTC.getTime() > lastResetUTC.getTime()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your daily tasks have expired. Please refresh the page.',
-        code: 'APPROVAL_EXPIRED'
-      });
-    }
+
+
 
     // Fetch task settings for current level
     const { data: settings } = await supabase
@@ -281,12 +271,14 @@ export const generateTask = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Check for combo at this position
-    const { data: combo } = await supabase
+    // Check for combo at this position (Level-relative: 1-20)
+    const relativePosition = ((nextTaskNumber - 1) % 20) + 1;
+    
+    const { data: combo } = await supabaseAdmin
       .from('combos')
       .select('*')
       .eq('user_id', userId)
-      .eq('position', nextTaskNumber)
+      .eq('position', relativePosition)
       .in('status', ['scheduled', 'active'])
       .maybeSingle();
 
@@ -508,11 +500,13 @@ export const submitWithdrawal = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, message: 'Invalid amount' });
     }
 
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await supabaseAdmin
       .from('users')
       .select('balance, withdrawal_address')
       .eq('id', userId)
       .single();
+      
+    console.log(`--- WITHDRAW ATTEMPT: User ID ${userId}, Found: ${!!user}, Error: ${userError?.message || 'none'} ---`);
 
     if (userError || !user) throw new Error('User not found');
 
@@ -538,14 +532,11 @@ export const submitWithdrawal = async (req: AuthRequest, res: Response) => {
 
     if (txnError) throw txnError;
 
-    const updates: any = {
-      balance: Number(user.balance) - Number(amount)
-    };
+    // Balance is NOT deducted here. It is only deducted when admin APPROVES the request.
+    // This prevents users gaming the system, and lets admin reject without any balance side-effects.
     if (!user.withdrawal_address && address) {
-      updates.withdrawal_address = address;
+      await supabaseAdmin.from('users').update({ withdrawal_address: address }).eq('id', userId);
     }
-
-    await supabase.from('users').update(updates).eq('id', userId);
 
     const io = req.app.get('io');
     if (io) {
@@ -618,10 +609,12 @@ export const updateWithdrawalAddress = async (req: AuthRequest, res: Response) =
 // @desc    Get all task settings
 export const getTaskSettings = async (req: AuthRequest, res: Response) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('task_settings')
       .select('*')
       .order('vip_level', { ascending: true });
+    
+    console.log(`--- TASK SETTINGS FETCHED: ${data?.length || 0} rows, Error: ${error?.message || 'none'} ---`);
     if (error) throw error;
     res.json({ success: true, data });
   } catch (error) {

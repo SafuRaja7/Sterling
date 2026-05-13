@@ -10,19 +10,19 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Please provide all required fields' });
     }
 
-    // Validate invite code if provided
+    // Validate invite code or username if provided
     let referredBy = null;
     if (inviteCode) {
-      const { data: referrer, error: referrerError } = await supabase
+      const { data: referrer } = await supabase
         .from('users')
         .select('id')
-        .eq('invite_code', inviteCode)
-        .single();
+        .or(`invite_code.eq.${inviteCode},username.ilike.${inviteCode}`)
+        .maybeSingle();
         
       if (referrer) {
         referredBy = referrer.id;
       } else {
-        return res.status(400).json({ success: false, message: 'Invalid invite code' });
+        return res.status(400).json({ success: false, message: 'Invalid invite code or username' });
       }
     }
 
@@ -43,10 +43,36 @@ export const register = async (req: Request, res: Response) => {
 
     const userId = authData.user.id;
 
-    // Ensure new users start at VIP 0 (Locked) and handle referral
+    // --- RACE CONDITION FIX: Wait for DB trigger to create profile ---
+    console.log(`--- REGISTRATION: WAITING FOR PROFILE ${userId} ---`);
+    let profileCreated = false;
+    for (let i = 0; i < 5; i++) {
+      const { data: check } = await supabase.from('users').select('id').eq('id', userId).maybeSingle();
+      if (check) {
+        profileCreated = true;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+    }
+
+    if (!profileCreated) {
+      console.error(`--- REGISTRATION ERROR: PROFILE NOT CREATED FOR ${userId} ---`);
+      // Fallback: manually create profile if trigger failed
+      await supabase.from('users').insert({
+        id: userId,
+        username,
+        role: 'user',
+        vip_level: 0
+      });
+    }
+
+    // Now update with referral and VIP 0
     const updates: any = { vip_level: 0 };
     if (referredBy) updates.referred_by = referredBy;
-    await supabase.from('users').update(updates).eq('id', userId);
+    
+    const { error: updateError } = await supabase.from('users').update(updates).eq('id', userId);
+    if (updateError) console.error('--- REGISTRATION UPDATE FAIL ---', updateError.message);
+    // ------------------------------------------------------------------
 
     // Now sign them in to get a token
     const supabaseAnon = createClient(
@@ -95,21 +121,30 @@ export const login = async (req: Request, res: Response) => {
     let email = username; 
     if (!username.includes('@')) {
       console.log(`--- LOOKING UP EMAIL FOR USERNAME: ${username} ---`);
-      // Since public.users doesn't have email, we have to use admin API or assuming mock email
-      // Or better, search by username in auth metadata
-      const { data: authUsers, error: listError } = await supabase.auth.admin.listUsers();
-      if (listError) throw listError;
-
-      const authUser = authUsers.users.find(u => 
-        u.user_metadata?.username?.toLowerCase() === username.toLowerCase() ||
-        u.email?.split('@')[0].toLowerCase() === username.toLowerCase()
-      );
-
-      if (authUser && authUser.email) {
-        email = authUser.email;
-        console.log(`--- MAPPED USERNAME ${username} TO EMAIL ${email} ---`);
+      
+      // Step 1: Query public.users to get the user ID
+      const { data: dbUser } = (await supabase.from('users').select('id').ilike('username', username).maybeSingle()) as any;
+      
+      if (dbUser && dbUser.id) {
+        // Step 2: Fetch auth user by ID to get their true email
+        const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(dbUser.id);
+        if (authUser?.user?.email) {
+          email = authUser.user.email;
+          console.log(`--- MAPPED USERNAME ${username} TO EMAIL ${email} ---`);
+        }
       } else {
-        return res.status(401).json({ success: false, message: 'Invalid username or password' });
+        // Fallback to legacy listUsers if not in public.users yet
+        const { data: authUsers } = await supabase.auth.admin.listUsers();
+        const fallbackUser = authUsers?.users?.find(u => 
+          u.user_metadata?.username?.toLowerCase() === username.toLowerCase() ||
+          u.email?.split('@')[0].toLowerCase() === username.toLowerCase()
+        );
+        if (fallbackUser && fallbackUser.email) {
+          email = fallbackUser.email;
+          console.log(`--- MAPPED USERNAME ${username} TO EMAIL ${email} (Fallback) ---`);
+        } else {
+          return res.status(401).json({ success: false, message: `User '${username}' not found.` });
+        }
       }
     }
 
@@ -126,7 +161,7 @@ export const login = async (req: Request, res: Response) => {
 
     if (loginError) {
       console.error('--- AUTH ERROR ---', loginError.message);
-      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+      return res.status(401).json({ success: false, message: `Auth Failed: ${loginError.message}` });
     }
     const { data: testUsers } = await supabase.from('users').select('username').limit(5);
     console.log('--- DB TEST (first 5 users):', testUsers?.map(u => u.username).join(', '));

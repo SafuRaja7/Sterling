@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/db';
+import { supabase, supabaseAdmin } from '../config/db';
 
 const mapUserToCamelCase = (user: any) => {
   if (!user) return null;
@@ -24,28 +24,32 @@ const mapUserToCamelCase = (user: any) => {
     vipLevelRequest: user.vipLevelRequest || 0,
     vipLevelRequestStatus: user.vipLevelRequestStatus || 'none',
     vipLevelApprovedAt: user.vip_level_approved_at,
-    withdrawalAddress: user.withdrawal_address
+    withdrawalAddress: user.withdrawal_address,
+    referredBy: user.referred_by
   };
 };
 
 export const getUsers = async (req: Request, res: Response) => {
   try {
-    const { data: users, error } = await supabase
+    console.log('--- ADMIN: FETCHING USERS ---');
+    const { data: users, error, count } = await supabaseAdmin
       .from('users')
-      .select('*, combos(position, status)')
+      .select('*, combos(position, status)', { count: 'exact' })
       .eq('role', 'user')
       .order('created_at', { ascending: false });
       
+    console.log(`--- ADMIN: FETCHED ${users?.length || 0} USERS (Total count: ${count}), Error: ${error?.message || 'none'} ---`);
     if (error) throw error;
     res.json({ success: true, data: users.map(mapUserToCamelCase) });
   } catch (error) {
+    console.error('--- ADMIN: GET USERS FAIL ---', error);
     res.status(500).json({ success: false, message: (error as Error).message });
   }
 };
 
 export const getReferrals = async (req: Request, res: Response) => {
   try {
-    const { data: users, error } = await supabase
+    const { data: users, error } = await supabaseAdmin
       .from('users')
       .select('id, username, referred_by, created_at')
       .not('referred_by', 'is', null);
@@ -80,11 +84,6 @@ export const editUser = async (req: Request, res: Response) => {
     if (withdrawalAddress !== undefined) updates.withdrawal_address = withdrawalAddress;
     if (username !== undefined) updates.username = username;
 
-    if (vipLevel !== undefined) {
-      updates.completed_tasks_today = 0;
-      updates.last_task_reset = new Date().toISOString();
-    }
-
     if (isTaskLocked !== undefined) {
       const { error: lockProbeError } = await supabase.from('users').select('is_task_locked').limit(1);
       if (!lockProbeError) {
@@ -92,10 +91,19 @@ export const editUser = async (req: Request, res: Response) => {
       }
     }
 
-    // 1. Update Profile in public.users
+    // 1. Fetch current user to compare level
+    const { data: oldUser, error: fetchError } = await supabaseAdmin
+      .from('users')
+      .select('vip_level, username, balance, total_deposited, withdrawal_address')
+      .eq('id', userId)
+      .single();
+    
+    if (fetchError || !oldUser) throw new Error('User not found');
+
+    // 2. Update Profile in public.users
     let user;
     if (Object.keys(updates).length > 0) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('users')
         .update(updates)
         .eq('id', userId)
@@ -103,15 +111,23 @@ export const editUser = async (req: Request, res: Response) => {
         .single();
       if (error) throw error;
       user = data;
+
+      // ONLY clear combos if the level actually CHANGED to a DIFFERENT level
+      if (vipLevel !== undefined && Number(vipLevel) !== Number(oldUser.vip_level)) {
+        await supabaseAdmin
+          .from('combos')
+          .delete()
+          .eq('user_id', userId)
+          .eq('status', 'scheduled');
+        console.log(`--- COMBOS REFRESHED FOR ${user.username}: Level ${oldUser.vip_level} -> ${vipLevel} ---`);
+      }
     } else {
-      const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
-      if (error) throw error;
-      user = data;
+      user = oldUser;
     }
 
     // 2. Update Auth Password if provided
     if (password) {
-      const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password: password
       });
       if (authError) throw authError;
@@ -127,29 +143,63 @@ export const changeAdminPassword = async (req: any, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const adminEmail = req.user.email;
+    const adminId = req.user.id;
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ success: false, message: 'Both current and new passwords are required' });
     }
 
-    // 1. Verify Current Password by signing in
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    // 1. Verify current password using a SEPARATE, isolated Supabase client.
+    //    NEVER use the shared `supabase` client for signIn — it overwrites the server session
+    //    and causes the dashboard to lose its database connection after a password change.
+    const { createClient } = await import('@supabase/supabase-js');
+    const verifyClient = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } }
+    );
+
+    const { error: signInError } = await verifyClient.auth.signInWithPassword({
       email: adminEmail,
       password: currentPassword
     });
 
     if (signInError) {
-      return res.status(401).json({ success: false, message: 'Invalid current password' });
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
     }
 
-    // 2. Update Password using Admin API
-    const { error: updateError } = await supabase.auth.admin.updateUserById(req.user.id, {
+    // 2. Update password using the high-privilege admin client
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(adminId, {
       password: newPassword
     });
 
     if (updateError) throw updateError;
 
-    res.json({ success: true, message: 'Password changed successfully' });
+    // 3. Re-authenticate with the new password to get a fresh access token.
+    //    When Supabase changes the password, it invalidates the old token.
+    //    We MUST return a new token so the frontend can update localStorage
+    //    and avoid a 401 on the next page refresh.
+    const freshClient = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } }
+    );
+
+    const { data: freshSession, error: freshError } = await freshClient.auth.signInWithPassword({
+      email: adminEmail,
+      password: newPassword
+    });
+
+    if (freshError || !freshSession?.session) {
+      // Password was changed but we couldn't get a fresh token — still a success, just warn
+      return res.json({ success: true, message: 'Password changed successfully. Please log in again.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+      newToken: freshSession.session.access_token
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -160,8 +210,30 @@ export const scheduleCombo = async (req: Request, res: Response) => {
     const { userId } = req.params;
     const { combos } = req.body;
 
+    // 1. Fetch existing combos for this user that are not completed
+    const { data: existingCombos } = await supabase
+      .from('combos')
+      .select('position')
+      .eq('user_id', userId)
+      .in('status', ['scheduled', 'active']);
+
+    const existingPositions = (existingCombos || []).map(c => Number(c.position));
+
     if (Array.isArray(combos)) {
-      // BATCH Injection
+      // Check for duplicates within the new batch
+      const newPositions = combos.map(c => Number(c.position));
+      const hasDuplicatesInBatch = newPositions.some((pos, idx) => newPositions.indexOf(pos) !== idx);
+      if (hasDuplicatesInBatch) {
+        return res.status(400).json({ success: false, message: 'Duplicate positions detected in your request.' });
+      }
+
+      // Check against existing positions
+      for (const pos of newPositions) {
+        if (existingPositions.includes(pos)) {
+          return res.status(400).json({ success: false, message: `A combo is already scheduled at position ${pos}.` });
+        }
+      }
+
       const finalCombos = combos.map((c: any) => ({
         user_id: userId,
         position: Number(c.position),
@@ -175,13 +247,18 @@ export const scheduleCombo = async (req: Request, res: Response) => {
       if (error) throw error;
       return res.json({ success: true, data });
     } else {
-      // SINGLE Injection (Backward Compatibility)
       const { position, itemsCount, price, commission } = req.body;
+      const pos = Number(position);
+
+      if (existingPositions.includes(pos)) {
+        return res.status(400).json({ success: false, message: `A combo is already scheduled at position ${pos}.` });
+      }
+
       const { data: combo, error } = await supabase
         .from('combos')
         .insert({
           user_id: userId,
-          position: Number(position),
+          position: pos,
           items_count: Number(itemsCount || 3),
           price: Number(price),
           commission: Number(commission),
@@ -280,7 +357,10 @@ export const approveTransaction = async (req: Request, res: Response) => {
             total_deposited: Number(user.total_deposited) + Number(transaction.net_amount)
           }).eq('id', user.id);
         } else if (transaction.type === 'withdrawal') {
-          await supabase.from('users').update({
+          // Deduct balance on approval. Balance was NOT touched when the user submitted the request.
+          const newBalance = Math.max(0, Number(user.balance) - Number(transaction.amount));
+          await supabaseAdmin.from('users').update({
+            balance: newBalance,
             total_withdrawn: Number(user.total_withdrawn) + Number(transaction.amount)
           }).eq('id', user.id);
         }
@@ -295,7 +375,7 @@ export const approveTransaction = async (req: Request, res: Response) => {
 
 export const getStats = async (req: Request, res: Response) => {
     try {
-        const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'user');
+        const { count: totalUsers } = await supabaseAdmin.from('users').select('*', { count: 'exact', head: true }).eq('role', 'user');
         
         let totalDeposits = 0;
         let pendingWithdrawals = 0;
@@ -304,7 +384,7 @@ export const getStats = async (req: Request, res: Response) => {
             const { data: deposits } = await supabase.from('transactions').select('amount').eq('type', 'deposit').eq('status', 'approved');
             totalDeposits = deposits?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
             
-            const { count: pendingCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending');
+            const { count: pendingCount } = await supabaseAdmin.from('transactions').select('*', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending');
             pendingWithdrawals = pendingCount || 0;
         } catch (e) {
             console.warn("Transactions table might be missing");
@@ -325,13 +405,14 @@ export const getStats = async (req: Request, res: Response) => {
 
 export const getAllTransactions = async (req: Request, res: Response) => {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('transactions')
             .select(`
                 *,
                 users (
                     username,
-                    vip_level
+                    vip_level,
+                    balance
                 )
             `)
             .or('admin_remarks.is.null,admin_remarks.neq.VIP_UNLOCK_REQUEST')
@@ -395,7 +476,7 @@ export const updateTaskSettings = async (req: Request, res: Response) => {
 // --- PRODUCT LIBRARY ---
 export const getProducts = async (req: Request, res: Response) => {
     try {
-        const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabaseAdmin.from('products').select('*').order('created_at', { ascending: false });
         if (error) throw error;
         
         const mappedData = data.map((p: any) => ({
@@ -478,7 +559,7 @@ export const getThreads = async (req: Request, res: Response) => {
   try {
     let { data: threads, error } = await supabase
       .from('support_threads')
-      .select('*, users(username, vip_level)')
+      .select('*, users(username, vip_level, balance)')
       .order('last_message_at', { ascending: false });
 
     if (error) {
@@ -681,17 +762,47 @@ export const resolveThread = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteThread = async (req: Request, res: Response) => {
+  try {
+    const { threadId } = req.params;
+    
+    // 1. Get thread info for cleanup
+    const { data: thread } = await supabaseAdmin.from('support_threads').select('user_id').eq('id', threadId).single();
+
+    // 2. Cascade delete messages
+    if (thread) {
+      // Delete by thread_id if column exists
+      await supabaseAdmin.from('support_messages').delete().eq('thread_id', threadId);
+      // Fallback: Delete by user_id for legacy compatibility
+      await supabaseAdmin.from('support_messages').delete().eq('user_id', thread.user_id);
+    }
+
+    // 3. Delete the thread itself
+    const { error } = await supabaseAdmin
+      .from('support_threads')
+      .delete()
+      .eq('id', threadId);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: 'Thread permanently removed' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+};
+
 // --- LEVEL APPROVALS ---
 export const getLevelRequests = async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('transactions')
       .select(`
         *,
         users (
           id,
           username,
-          vip_level
+          vip_level,
+          balance
         )
       `)
       .eq('type', 'deposit')
@@ -706,6 +817,7 @@ export const getLevelRequests = async (req: Request, res: Response) => {
       _id: tx.users.id,
       username: tx.users.username,
       vipLevel: tx.users.vip_level,
+      balance: tx.users.balance,
       vipLevelRequest: tx.amount, // Level stored in amount
       transactionId: tx.id // Keep for approval
     }));
@@ -749,6 +861,61 @@ export const approveLevelUnlock = async (req: Request, res: Response) => {
     res.json({ success: true, message: `Level ${level} ${action}` });
   } catch (error) {
     console.error("APPROVE LEVEL ERROR:", error);
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    console.log(`--- ADMIN: DELETING USER ${userId} ---`);
+
+    // 1. Delete associated data first
+    await supabaseAdmin.from('transactions').delete().eq('user_id', userId);
+    await supabaseAdmin.from('combos').delete().eq('user_id', userId);
+    await supabaseAdmin.from('support_messages').delete().eq('user_id', userId);
+    await supabaseAdmin.from('support_threads').delete().eq('user_id', userId);
+
+    // 2. Delete from public.users
+    const { error: userError } = await supabaseAdmin
+      .from('users')
+      .delete()
+      .eq('id', userId);
+    
+    if (userError) {
+      console.warn('--- ADMIN: USER DELETE WARNING ---', userError.message);
+    }
+
+    // 3. Delete from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    
+    if (authError) {
+      console.warn('--- ADMIN: AUTH DELETE WARNING ---', authError.message);
+    }
+
+    res.json({ success: true, message: 'User deleted completely from system' });
+  } catch (error) {
+    console.error('--- ADMIN: DELETE USER FAIL ---', error);
+    res.status(500).json({ success: false, message: (error as Error).message });
+  }
+};
+
+export const deleteCombo = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`--- ADMIN: DELETING COMBO ${id} ---`);
+
+    const { error } = await supabaseAdmin
+      .from('combos')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: 'Combo deleted successfully' });
+  } catch (error) {
+    console.error('DELETE COMBO ERROR:', error);
     res.status(500).json({ success: false, message: (error as Error).message });
   }
 };

@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  TrendingUp, CheckSquare, Wallet, Users,
+  CheckSquare, Wallet, Users,
   ArrowUpRight, ArrowDownLeft, RefreshCw, ChevronRight,
   Crown, Zap, Star, UserPlus, ShieldCheck, FileText, 
-  Handshake, BookOpen, UserCircle
+  Handshake, BookOpen, UserCircle, Sparkles, TrendingUp,
+  LayoutDashboard, Globe, ShieldAlert
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
@@ -16,10 +17,17 @@ import toast from "react-hot-toast";
 import BottomNav from "@/components/layout/BottomNav";
 import GlobalActivity from "@/components/dashboard/GlobalActivity";
 
+const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A0 100%)";
+
 export default function Dashboard() {
   const router = useRouter();
   const { user, token, logout } = useAuthStore();
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalEarnings: 0,
+    todayEarnings: 0,
+    completedTasks: 0
+  });
 
   useEffect(() => {
     if (!token) { router.push("/login"); return; }
@@ -32,9 +40,15 @@ export default function Dashboard() {
       const profileRes = await api.get("/user/profile");
       const profileData = profileRes.data.data;
       useAuthStore.getState().setUser(profileData);
+      
+      setStats({
+        totalEarnings: profileData.total_commission || 0,
+        todayEarnings: profileData.today_commission || 0,
+        completedTasks: profileData.daily_tasks_completed || 0
+      });
     } catch (err: any) {
       console.error("Dashboard error:", err);
-      toast.error(err.response?.data?.message || "An error occurred");
+      toast.error(err.response?.data?.message || "Session failed");
       logout();
       router.push("/login");
     } finally {
@@ -44,116 +58,115 @@ export default function Dashboard() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center gap-6">
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-6">
         <div className="w-12 h-12 rounded-full border-2 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
       </div>
     );
   }
 
   const actions = [
-    { label: "Deposit", icon: ArrowDownLeft, path: "/wallet", color: "rgba(56,161,105,0.1)", iconColor: "#38A169" },
-    { label: "Withdraw", icon: ArrowUpRight, path: "/wallet", color: "rgba(229,62,62,0.1)", iconColor: "#E53E3E" },
-    { label: "Invite", icon: UserPlus, path: "/invite", color: "rgba(49,130,206,0.1)", iconColor: "#3182CE" },
-    { label: "Partners", icon: Handshake, path: "/partners", color: "rgba(212,175,55,0.1)", iconColor: "#D4AF37" },
+    { label: "Deposit", icon: ArrowDownLeft, path: "/wallet" },
+    { label: "Withdraw", icon: ArrowUpRight, path: "/wallet" },
+    { label: "Invite", icon: UserPlus, path: "/invite" },
+    { label: "Tier List", icon: Crown, path: "/tasks" },
   ];
 
   const insights = [
-    { label: "Profile", image: "/platform-profile.png", path: "/platform-profile" },
+    { label: "Events", image: "/platform-profile.png", path: "/events" },
     { label: "Rules", image: "/rules.png", path: "/rules" },
     { label: "Partners", image: "/cooperation.png", path: "/partners" },
     { label: "Guide", image: "/guide.png", path: "/guide" },
   ];
 
-  return (
-    <div className="min-h-screen luxury-bg pb-32 relative overflow-hidden font-sans">
-      <div className="luxury-bg-orb w-[600px] h-[600px] -top-60 -right-40 opacity-15" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-50" />
+  const partners = [
+    { name: "Amazon", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Amazon_logo.svg/1000px-Amazon_logo.svg.png" },
+    { name: "Facebook", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1000px-Facebook_Logo_%282019%29.png" },
+    { name: "Walmart", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Walmart_Spark.svg/1000px-Walmart_Spark.svg.png" },
+    { name: "Ebay", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Ebay_logo.svg/1000px-Ebay_logo.svg.png" },
+  ];
 
-      {/* Header */}
-      <header className="px-6 pt-12 pb-6 relative z-10 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[rgba(245,245,245,0.4)] mb-1">
-            Welcome back
-          </p>
-          <h1 className="text-2xl font-black text-[#F5F5F5] tracking-tight">
-            {user.username}
-          </h1>
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#0A0A0A] via-[#1A1A1A] to-[#050505] pb-32 relative overflow-hidden font-sans">
+      {/* Subtle Yellow Gradient Accents (Toned Down) */}
+      <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[40%] bg-[#D4AF37]/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 left-[-10%] w-[60%] h-[30%] bg-[#D4AF37]/3 blur-[100px] rounded-full pointer-events-none" />
+      
+      {/* User Friendly Header */}
+      <header className="px-8 pt-16 pb-12 relative z-10 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 rounded-[24px] bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-center backdrop-blur-xl shadow-2xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-gold-gradient opacity-10" />
+             <img src="/images/icons/shopify.png" alt="Logo" className="w-10 h-10 object-contain relative z-10" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/40 mb-1">Welcome back,</p>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              {user.username} <span className="text-[#D4AF37] text-lg ml-1">V{user.vipLevel}</span>
+            </h1>
+          </div>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-          style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)" }}>
-          <Crown size={14} className="text-[#D4AF37]" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#D4AF37]">
-            VIP {user.vipLevel}
-          </span>
-        </div>
+        <button onClick={() => router.push("/profile")} className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#D4AF37]/10 transition-all shadow-xl">
+          <UserCircle size={26} className="text-[#D4AF37]/60" />
+        </button>
       </header>
 
-      <main className="px-6 space-y-8 relative z-10">
-        {/* Top Action Grid */}
-        <div className="grid grid-cols-4 gap-3">
+      <main className="px-8 space-y-12 relative z-10">
+        
+        {/* Action Grid - Bigger Container */}
+        <div className="grid grid-cols-4 gap-6">
           {actions.map((action, i) => (
             <motion.button
               key={action.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.05 }}
               onClick={() => router.push(action.path)}
-              className="flex flex-col items-center gap-3 group"
+              className="flex flex-col items-center gap-4 group"
             >
-              <div className="w-full aspect-square rounded-3xl flex items-center justify-center transition-all group-hover:scale-105 group-active:scale-95"
-                style={{ 
-                  background: action.color, 
-                  border: "1px solid rgba(245,245,245,0.05)",
-                  boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
-                }}>
-                <action.icon size={28} style={{ color: action.iconColor }} />
+              <div className="w-24 h-24 rounded-[32px] flex items-center justify-center transition-all duration-500 group-hover:scale-110 group-active:scale-95 relative overflow-hidden shadow-2xl bg-[#D4AF37]/5 border border-[#D4AF37]/20">
+                <div className="absolute inset-0 bg-gold-gradient opacity-5 group-hover:opacity-20 transition-opacity" />
+                <action.icon size={32} className="text-[#D4AF37] drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]" />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-[rgba(245,245,245,0.5)] group-hover:text-[#F5F5F5] transition-colors">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#D4AF37]/40 group-hover:text-[#D4AF37] transition-colors">
                 {action.label}
               </span>
             </motion.button>
           ))}
         </div>
 
-        <GlobalActivity />
+        {/* Live Activity Display - Moved Up */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-5 w-1.5 bg-[#D4AF37]/40 rounded-full" />
+            <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/60">Recent Activity</h3>
+          </div>
+          <div className="bg-black/40 backdrop-blur-xl rounded-[40px] p-2 border border-[#D4AF37]/10 shadow-2xl overflow-hidden">
+            <GlobalActivity />
+          </div>
+        </div>
 
-        {/* Secure Banner */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          className="rounded-2xl p-4 flex items-center gap-4"
-          style={{ background: "rgba(56,161,105,0.08)", border: "1px solid rgba(56,161,105,0.15)" }}
-        >
-          <div className="h-10 w-10 rounded-xl bg-[#38A169]/20 flex items-center justify-center">
-            <ShieldCheck size={20} className="text-[#38A169]" />
+        {/* Platform Insights - Smaller Images */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-1.5 bg-[#D4AF37]/40 rounded-full" />
+              <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/60">Platform Insights</h3>
+            </div>
+            <ChevronRight size={14} className="text-white/10" />
           </div>
-          <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#38A169] mb-0.5">Secure & Verified</p>
-            <p className="text-[9px] font-bold text-[rgba(245,245,245,0.4)] uppercase">Your funds are protected by GMS Shield.</p>
-          </div>
-          <ChevronRight size={16} className="text-[#38A169]/40" />
-        </motion.div>
-
-        {/* Platform Insights */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[rgba(245,245,245,0.4)]">Platform Insights</p>
-            <ChevronRight size={14} className="text-white/20" />
-          </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-4">
             {insights.map((item, i) => (
               <motion.button
                 key={item.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 + i * 0.05 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + i * 0.05 }}
                 onClick={() => router.push(item.path)}
-                className="relative aspect-square rounded-2xl overflow-hidden group"
+                className="relative aspect-square rounded-[24px] overflow-hidden group shadow-xl border border-white/5 bg-black/40 p-8"
               >
-                <img src={item.image} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end justify-center pb-3">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-white/80 group-hover:text-white transition-colors">
+                <img src={item.image} alt="" className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex items-end justify-center pb-4">
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/80 group-hover:text-white transition-colors">
                     {item.label}
                   </span>
                 </div>
@@ -162,49 +175,65 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Official Partners Section - Compact 3D Style */}
-        <div className="relative rounded-[32px] p-6 overflow-hidden bg-[#111111] border border-white/5 shadow-2xl">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-8 w-8 rounded-lg bg-[#D4AF37]/10 flex items-center justify-center border border-[#D4AF37]/20">
-              <Handshake size={16} className="text-[#D4AF37]" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]/80">Official Partners</p>
-              <p className="text-[8px] font-bold text-white/10 uppercase tracking-[0.2em] mt-0.5">Verified Ecosystem</p>
-            </div>
+        {/* Official Partners Section - Small Logos */}
+        <div className="space-y-6 max-w-4xl mx-auto w-full">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-5 w-1.5 bg-[#D4AF37]/40 rounded-full" />
+            <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#D4AF37]/60">Global Partners</h3>
           </div>
-  
-          <div className="grid grid-cols-4 gap-4 px-2">
-            {[
-              { name: 'amazon', pos: '0% 0%' },
-              { name: 'facebook', pos: '100% 0%' },
-              { name: 'walmart', pos: '0% 100%' },
-              { name: 'ebay', pos: '100% 100%' }
-            ].map((partner) => (
-              <div key={partner.name} className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/5 shadow-lg bg-black/40">
-                  <div 
-                    className="w-full h-full"
-                    style={{ 
-                      backgroundImage: `url('/partners_3d.png')`,
-                      backgroundSize: '200% 200%',
-                      backgroundPosition: partner.pos
-                    }}
-                  />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="rounded-[40px] p-6 relative overflow-hidden bg-black/40 border border-[#D4AF37]/10 shadow-2xl group cursor-pointer"
+            onClick={() => router.push("/partners")}
+          >
+            <div className="absolute -right-10 -top-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity rotate-12">
+              <Handshake size={180} className="text-[#D4AF37]" />
+            </div>
+            
+            <div className="grid grid-cols-4 gap-4 relative z-10">
+              {partners.map((partner) => (
+                <div key={partner.name} className="flex flex-col items-center gap-3">
+                  <div className="w-full aspect-square rounded-[20px] bg-white/[0.03] border border-white/[0.05] flex items-center justify-center p-6 group-hover:border-[#D4AF37]/30 transition-all duration-500">
+                    <img src={partner.logo} alt={partner.name} className="w-full h-full object-contain grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" />
+                  </div>
                 </div>
-                <span className="text-[7px] font-black uppercase tracking-widest text-white/20 italic">{partner.name}</span>
+              ))}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between relative z-10">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-[#D4AF37]/40" />
+                <p className="text-[10px] font-medium text-white/20 uppercase tracking-[0.2em]">Institutional Network</p>
               </div>
-            ))}
-          </div>
-  
-          <div className="mt-8 flex items-center gap-2 opacity-20">
-            <div className="w-1 h-1 rounded-full bg-[#38A169]" />
-            <p className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Global Network Active</p>
-          </div>
+              <div className="flex items-center gap-1 text-[10px] font-black text-[#D4AF37] uppercase tracking-widest group-hover:gap-3 transition-all">
+                Details <ChevronRight size={12} />
+              </div>
+            </div>
+          </motion.div>
         </div>
+
+        {/* Security Summary */}
+        <motion.div
+          className="rounded-[40px] p-10 flex flex-col items-center text-center gap-6 relative overflow-hidden bg-black/40 border border-[#D4AF37]/10"
+        >
+          <div className="h-16 w-16 rounded-3xl bg-[#D4AF37]/10 flex items-center justify-center">
+            <ShieldCheck size={32} className="text-[#D4AF37]" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-[14px] font-black uppercase tracking-[0.4em] text-white">Secure Platform</p>
+            <p className="text-[11px] font-medium text-white/20 leading-relaxed uppercase tracking-widest max-w-[240px]">All transactions are protected by institutional grade security.</p>
+          </div>
+        </motion.div>
+
       </main>
 
       <BottomNav />
+
+      <style jsx global>{`
+        .bg-gold-gradient { background: ${GOLDEN_GRADIENT}; }
+      `}</style>
     </div>
   );
 }

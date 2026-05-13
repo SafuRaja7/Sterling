@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../config/db';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, supabaseAdmin } from '../config/db';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_sterling_jwt_key_2026';
@@ -68,10 +67,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       }
 
       // Fetch user profile from public.users using a fresh client to ensure no config interference
-      const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-        auth: { persistSession: false }
-      });
-
+      // Use the global supabaseAdmin which is stateless and high-privilege
       let { data: userProfile, error: profileError } = await supabaseAdmin
         .from('users')
         .select('*')
@@ -145,48 +141,31 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
         email: user.email
       };
 
-      // --- DAILY RESET LOGIC (Fixed UTC 00:00 — NOT rolling 24hrs) ---
-      // This only resets task counters. VIP level approvals persist
-      // unless balance drops below minimum (handled in userController).
+      // --- COMPLETION-BASED RESET LOGIC ---
       const now = new Date();
-      const todayUTC = new Date(Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate()
-      ));
+      const lastReset = userProfile.last_task_reset ? new Date(userProfile.last_task_reset) : new Date(0);
 
-      const lastReset = userProfile.last_task_reset
-        ? new Date(userProfile.last_task_reset)
-        : new Date(0);
-      const lastResetUTC = new Date(Date.UTC(
-        lastReset.getUTCFullYear(),
-        lastReset.getUTCMonth(),
-        lastReset.getUTCDate()
-      ));
 
-      if (todayUTC.getTime() > lastResetUTC.getTime()) {
-        console.log(`--- DAILY RESET FOR ${userProfile.username} (UTC 00:00) ---`);
 
-        // Balance re-validation: downgrade vip_level if balance dropped
-        // Do NOT blindly reset to 0 — only drop if balance is insufficient
-        let newVipLevel = userProfile.vip_level || 0;
-        if (newVipLevel >= 3 && userProfile.balance < 799) newVipLevel = 2;
-        if (newVipLevel >= 2 && userProfile.balance < 399) newVipLevel = 1;
-        if (newVipLevel >= 1 && userProfile.balance < 20) newVipLevel = 0;
+      // NEW: Check if user was created today. If so, don't reset.
+
+
+      if (userProfile.completed_tasks_today >= 60 && now.getTime() > lastReset.getTime() + 24 * 60 * 60 * 1000) {
+        console.log(`--- ROLLING RESET TRIGGERED FOR ${userProfile.username} ---`);
+
+
 
         const { error: resetError } = await supabase
           .from('users')
           .update({
             completed_tasks_today: 0,
-            vip_level: newVipLevel,   // Persists approvals unless balance dropped
-            last_task_reset: now.toISOString(),
-            updated_at: now.toISOString()
+            last_task_reset: now.toISOString()
           })
           .eq('id', user.id);
 
         if (!resetError) {
           req.user.completed_tasks_today = 0;
-          req.user.vip_level = newVipLevel;
+
         }
       }
 

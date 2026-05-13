@@ -65,14 +65,21 @@ export default function VALogin() {
             initial={{ scale: 0.7 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
-            className="h-20 w-20 rounded-3xl mx-auto mb-6 flex items-center justify-center"
+            className="h-24 w-24 mx-auto mb-6 flex items-center justify-center relative overflow-hidden"
             style={{
-              background: "linear-gradient(135deg, #2D3748 0%, #4A5568 50%, #718096 100%)",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.4)",
-              border: "1px solid rgba(255,255,255,0.1)"
+              maskImage: "radial-gradient(circle at center, black 40%, transparent 75%)",
+              WebkitMaskImage: "radial-gradient(circle at center, black 40%, transparent 75%)"
             }}
           >
-            <Briefcase size={36} className="text-[#F5F5F5]" strokeWidth={2.5} />
+            <img 
+              src="/images/icons/shopify.png" 
+              alt="Logo" 
+              className="w-full h-[140%] object-contain object-top drop-shadow-[0_15px_30px_rgba(212,175,55,0.4)]" 
+              style={{ 
+                mixBlendMode: "screen",
+                filter: "contrast(1.2) brightness(1.1)"
+              }}
+            />
           </motion.div>
           <h1 className="text-3xl font-black tracking-tighter text-[#F5F5F5] mb-2 uppercase">
             VA <span className="text-gold-gradient">Control</span>

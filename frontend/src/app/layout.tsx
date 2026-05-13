@@ -21,16 +21,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </Suspense>
         <Toaster
           position="top-center"
+          containerStyle={{
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
           toastOptions={{
+            duration: 3000,
             style: {
-              background: "#1A1A1A",
+              background: "rgba(13, 13, 13, 0.95)",
               color: "#F5F5F5",
-              border: "1px solid rgba(212,175,55,0.3)",
-              borderRadius: "12px",
-              fontWeight: 700,
-              fontSize: "12px",
-              letterSpacing: "0.05em",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.8), 0 0 20px rgba(212,175,55,0.1)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid rgba(212,175,55,0.4)",
+              borderRadius: "24px",
+              padding: "20px 32px",
+              fontWeight: 800,
+              fontSize: "14px",
+              textAlign: "center",
+              letterSpacing: "0.02em",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.9), 0 0 40px rgba(212,175,55,0.2)",
+              maxWidth: "400px",
             },
             success: {
               iconTheme: { primary: "#D4AF37", secondary: "#0D0D0D" },

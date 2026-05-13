@@ -369,18 +369,19 @@ export default function Tasks() {
           
           <div className="space-y-6">
             {tiers.map((tier, i) => {
-              const reqBalance = Number(tier.min_access_balance) || (tier.vip_level === 1 ? 20 : tier.vip_level === 2 ? 399 : 799);
+              const reqBalance = Number(tier.min_access_balance) || (tierVip === 1 ? 20 : tierVip === 2 ? 399 : 799);
               const userVip = Number(user.vipLevel || 0);
-              const tierVip = Number(tier.vip_level);
               
-              // Only unlocked if user's approved VIP level is at least this tier, balance is met, and it's not Level 1 for a Level 0 user
-              const isUnlocked = userVip >= tierVip && user.balance >= reqBalance && userVip > 0;
+              // RULE: Only unlocked if user's approved VIP level matches or exceeds this tier AND balance is sufficient
+              // For Tier 1, user must be at least Level 1 (approved) to enter.
+              const isUnlocked = userVip >= tierVip && user.balance >= reqBalance;
               
               const isPending = Number(user.vipLevelRequest) === tierVip && user.vipLevelRequestStatus === 'pending';
               const tasksDone = Math.max(0, Math.min(20, user.completedTasksToday - (tierVip - 1) * 20));
               const isComp = tasksDone >= 20;
               const accent = tierColors[tierVip] || "#D4AF37";
               
+              // RULE: Prerequisite tasks (20 per level) must be finished before the UNLOCK button for the next level appears
               const prevLevelTasksRequired = (tierVip - 1) * 20;
               const hasFinishedPrevLevel = tierVip === 1 || user.completedTasksToday >= prevLevelTasksRequired;
               const isEligible = !isUnlocked && !isPending && user.balance >= reqBalance && hasFinishedPrevLevel;

@@ -16,6 +16,8 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import BottomNav from "@/components/layout/BottomNav";
 import GlobalActivity from "@/components/dashboard/GlobalActivity";
+import { FaAmazon, FaFacebookF, FaEbay } from "react-icons/fa";
+import { SiWalmart } from "react-icons/si";
 
 const GOLDEN_GRADIENT = "linear-gradient(135deg, #A08020 0%, #D4AF37 50%, #F5E0A0 100%)";
 
@@ -87,11 +89,11 @@ export default function Dashboard() {
   ];
 
   const partners = [
-    { name: "Amazon", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Amazon_logo.svg/1000px-Amazon_logo.svg.png" },
-    { name: "Facebook", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1000px-Facebook_Logo_%282019%29.png" },
-    { name: "Walmart", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Walmart_Spark.svg/1000px-Walmart_Spark.svg.png" },
-    { name: "Ebay", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Ebay_logo.svg/1000px-Ebay_logo.svg.png" },
-  ];
+  { name: "Amazon", icon: FaAmazon },
+  { name: "Facebook", icon: FaFacebookF },
+  { name: "Walmart", icon: SiWalmart },
+  { name: "Ebay", icon: FaEbay },
+];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0A0A0A] via-[#1A1A1A] to-[#050505] pb-32 relative overflow-hidden font-sans">
@@ -201,14 +203,21 @@ export default function Dashboard() {
             </div>
             
             <div className="grid grid-cols-4 gap-4 relative z-10">
-              {partners.map((partner) => (
-                <div key={partner.name} className="flex flex-col items-center gap-3">
-                  <div className="w-full aspect-square rounded-[20px] bg-white/[0.03] border border-white/[0.05] flex items-center justify-center p-6 group-hover:border-[#D4AF37]/30 transition-all duration-500">
-                    <img src={partner.logo} alt={partner.name} className="w-full h-full object-contain grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" />
-                  </div>
-                </div>
-              ))}
-            </div>
+  {partners.map((partner) => (
+    <div key={partner.name} className="flex flex-col items-center gap-3">
+      <div className="w-full aspect-square rounded-[20px] bg-white/[0.03] border border-white/[0.05] flex items-center justify-center p-6 group-hover:border-[#D4AF37]/30 transition-all duration-500">
+        <partner.icon
+          size={42}
+          className="text-white/40 group-hover:text-[#D4AF37] transition-all duration-500"
+        />
+      </div>
+
+      <span className="text-[10px] text-white/50 font-semibold uppercase tracking-wider">
+        {partner.name}
+      </span>
+    </div>
+  ))}
+</div>
 
             <div className="mt-6 flex items-center justify-between relative z-10">
               <div className="flex items-center gap-2">

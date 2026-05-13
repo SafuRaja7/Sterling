@@ -441,7 +441,7 @@ export default function Tasks() {
                       </div>
                       <div>
                         <div className="flex items-center gap-4 mb-3">
-                          <h3 className="text-2xl font-black text-white uppercase tracking-tight drop-shadow-md">Tier V{tier.vip_level}</h3>
+                          <h3 className="text-2xl font-black text-white uppercase tracking-tight drop-shadow-md">VIP L{tier.vip_level}</h3>
                           {isComp && <div className="h-6 w-6 rounded-full bg-[#38A169] flex items-center justify-center text-white shadow-lg shadow-[#38A169]/30"><CheckCircle size={16} /></div>}
                         </div>
                         <div className="flex gap-4">

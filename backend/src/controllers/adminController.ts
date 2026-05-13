@@ -869,34 +869,55 @@ export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    console.log(`--- ADMIN: DELETING USER ${userId} ---`);
+    console.log(`--- ADMIN: PERMANENTLY DELETING USER ${userId} ---`);
 
-    // 1. Delete associated data first
+    // 1. Decouple Referrals: Set referred_by to null for anyone this user referred
+    const { error: refError } = await supabaseAdmin
+      .from('users')
+      .update({ referred_by: null })
+      .eq('referred_by', userId);
+    if (refError) console.warn('--- ADMIN: REFERRAL DECOUPLE WARNING ---', refError.message);
+
+    // 2. Cascade Delete User-Specific Data
+    // We do this in a specific order to avoid FK violations
+    console.log('   > Cleaning tasks...');
+    await supabaseAdmin.from('tasks').delete().eq('user_id', userId);
+    
+    console.log('   > Cleaning transactions...');
     await supabaseAdmin.from('transactions').delete().eq('user_id', userId);
+    
+    console.log('   > Cleaning combos...');
     await supabaseAdmin.from('combos').delete().eq('user_id', userId);
+    
+    console.log('   > Cleaning support chat...');
     await supabaseAdmin.from('support_messages').delete().eq('user_id', userId);
     await supabaseAdmin.from('support_threads').delete().eq('user_id', userId);
 
-    // 2. Delete from public.users
+    // 3. Delete from public.users
+    console.log('   > Deleting profile from public.users...');
     const { error: userError } = await supabaseAdmin
       .from('users')
       .delete()
       .eq('id', userId);
     
     if (userError) {
-      console.warn('--- ADMIN: USER DELETE WARNING ---', userError.message);
+      console.error('--- ADMIN: USER PROFILE DELETE FAIL ---', userError.message);
+      throw new Error(`Failed to delete user profile: ${userError.message}`);
     }
 
-    // 3. Delete from Supabase Auth
+    // 4. Delete from Supabase Auth
+    console.log('   > Deleting from Supabase Auth...');
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     
     if (authError) {
       console.warn('--- ADMIN: AUTH DELETE WARNING ---', authError.message);
+      // We don't throw here because the profile is already gone, but we log it
     }
 
-    res.json({ success: true, message: 'User deleted completely from system' });
+    console.log(`--- ADMIN: USER ${userId} DELETED SUCCESSFULLY ---`);
+    res.json({ success: true, message: 'User and all associated data permanently removed' });
   } catch (error) {
-    console.error('--- ADMIN: DELETE USER FAIL ---', error);
+    console.error('--- ADMIN: DELETE USER CRITICAL FAIL ---', error);
     res.status(500).json({ success: false, message: (error as Error).message });
   }
 };

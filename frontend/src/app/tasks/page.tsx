@@ -296,12 +296,20 @@ export default function Tasks() {
                       </div>
                     </div>
 
-                    <button onClick={submitTask} disabled={submitting} className="h-22 w-full rounded-[35px] flex items-center justify-center gap-5 bg-gold-gradient text-black font-black uppercase text-base tracking-[0.3em] shadow-[0_20px_50px_rgba(212,175,55,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-white opacity-20 group-hover:opacity-30 transition-opacity" />
+                    <button 
+                      onClick={submitTask} 
+                      disabled={submitting} 
+                      className="h-24 w-full rounded-[35px] flex items-center justify-center gap-5 bg-gold-gradient text-black font-black uppercase text-lg tracking-[0.4em] shadow-[0_20px_60px_rgba(212,175,55,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 relative overflow-hidden group"
+                    >
+                      <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
                       {submitting ? (
                         <div className="w-8 h-8 rounded-full border-4 border-black/30 border-t-black animate-spin" />
                       ) : (
-                        <><ShieldCheck size={28} /><span>Execute Order</span></>
+                        <>
+                          <ShieldCheck size={32} className="drop-shadow-lg" />
+                          <span className="drop-shadow-md">Execute Order</span>
+                        </>
                       )}
                     </button>
                   </div>
@@ -376,11 +384,14 @@ export default function Tasks() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
                   onClick={() => isUnlocked && !isComp && (setViewTier(tier.vip_level), setView('engine'))}
-                  className={`relative overflow-hidden rounded-[45px] p-10 border transition-all duration-500 cursor-pointer shadow-2xl ${
-                    isUnlocked ? "bg-[#D4AF37]/5 hover:bg-[#D4AF37]/10 hover:translate-x-2" : "bg-black/60 grayscale opacity-40"
+                  className={`relative overflow-hidden rounded-[45px] p-10 border transition-all duration-700 shadow-2xl ${
+                    isUnlocked ? "bg-[#D4AF37]/5 border-[#D4AF37]/30 cursor-pointer hover:bg-[#D4AF37]/10 hover:translate-x-2" : 
+                    isPending ? "bg-blue-500/5 border-blue-500/20 opacity-90" :
+                    isEligible ? "bg-white/5 border-white/20 cursor-pointer hover:border-[#D4AF37]/40" :
+                    "bg-black/60 border-white/5 grayscale opacity-30 cursor-not-allowed"
                   }`}
                   style={{ 
-                    borderColor: isUnlocked ? `${accent}40` : "rgba(212,175,55,0.1)",
+                    boxShadow: isUnlocked ? "0 25px 50px -12px rgba(212, 175, 55, 0.25)" : "none"
                   }}
                 >
                   <div className="absolute -right-8 -top-8 p-10 opacity-[0.04] group-hover:scale-110 transition-transform">
@@ -426,7 +437,7 @@ export default function Tasks() {
                       ) : isEligible ? (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleRequestUnlock(tier.vip_level); }}
-                          className="h-14 px-8 rounded-2xl bg-gold-gradient text-black flex items-center justify-center font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl shadow-[#D4AF37]/30"
+                          className="h-16 px-10 rounded-2xl bg-white/10 border border-white/20 text-white flex items-center justify-center font-black uppercase text-[12px] tracking-[0.3em] hover:bg-gold-gradient hover:text-black hover:border-transparent transition-all duration-300 shadow-xl"
                         >
                           Unlock
                         </button>
